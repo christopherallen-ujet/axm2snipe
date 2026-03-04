@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-axm2snipe syncs Apple Business Manager (ABM) devices into Snipe-IT asset management. Written in Go.
+axm2snipe syncs Apple Business Manager (ABM) / Apple School Manager (ASM) devices into Snipe-IT asset management. The "X" in axm2snipe represents both ABM and ASM. Written in Go.
 
 ## Build & Run
 

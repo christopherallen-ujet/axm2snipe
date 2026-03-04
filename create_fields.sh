@@ -1,5 +1,5 @@
 #!/bin/bash
-# Creates custom fields in Snipe-IT for ABM/AppleCare data and associates them with a fieldset.
+# Creates custom fields in Snipe-IT for ABM/ASM/AppleCare data and associates them with a fieldset.
 # Edit SNIPE_URL, API_KEY, and FIELDSET_ID before running.
 # Uncomment the create_field lines for the fields you need.
 

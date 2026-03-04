@@ -6,9 +6,9 @@ Inspired by [jamf2snipe](https://github.com/grokability/jamf2snipe), but connect
 
 ## Features
 
-- Syncs all devices from Apple Business Manager into Snipe-IT as hardware assets
+- Syncs all devices from Apple Business Manager / Apple School Manager into Snipe-IT as hardware assets
 - Automatically creates Snipe-IT asset models for new device types
-- Automatically creates Snipe-IT suppliers from ABM purchase sources
+- Automatically creates Snipe-IT suppliers from ABM/ASM purchase sources
 - Fetches AppleCare coverage details for each device
 - Matches existing assets by serial number (create or update)
 - Sync a single device by serial number with `--serial`
@@ -22,9 +22,9 @@ Inspired by [jamf2snipe](https://github.com/grokability/jamf2snipe), but connect
 
 ## Prerequisites
 
-### Apple Business Manager
+### Apple Business Manager / Apple School Manager
 
-1. Sign in to [Apple Business Manager](https://business.apple.com)
+1. Sign in to [Apple Business Manager](https://business.apple.com) or [Apple School Manager](https://school.apple.com)
 2. Go to **Settings > API**
 3. Create a new API key and note the **Client ID** and **Key ID**
 4. Download the private key `.pem` file
@@ -111,17 +111,17 @@ axm2snipe -d
 
 ## How It Works
 
-1. **Connects** to both Apple Business Manager and Snipe-IT APIs
+1. **Connects** to Apple Business Manager / Apple School Manager and Snipe-IT APIs
 2. **Fetches** all Snipe-IT models and suppliers to build local caches
-3. **Retrieves** all devices from ABM (with optional product family filter)
+3. **Retrieves** all devices from ABM/ASM (with optional product family filter)
 4. For each device:
    - **Looks up** the asset in Snipe-IT by serial number
    - If not found and `update_only` is true: **skips**
    - If not found: **creates** a new asset (after resolving model and supplier)
    - If found: **updates** the asset with mapped fields (if ABM data is newer or `--force`)
    - If multiple matches: **skips** with a warning
-   - **Fetches** AppleCare coverage details from ABM
-   - **Resolves** supplier from ABM purchase source (auto-creates if needed)
+   - **Fetches** AppleCare coverage details from ABM/ASM
+   - **Resolves** supplier from ABM/ASM purchase source (auto-creates if needed)
 
 ### Field Mapping
 

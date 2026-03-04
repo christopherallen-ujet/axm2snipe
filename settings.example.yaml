@@ -2,8 +2,8 @@
 # Copy this file to settings.yaml and fill in your values.
 
 abm:
-  # Apple Business Manager API credentials
-  # Generate these at https://business.apple.com (Settings > API)
+  # Apple Business Manager / Apple School Manager API credentials
+  # Generate these at https://business.apple.com or https://school.apple.com (Settings > API)
   client_id: "BUSINESSAPI.xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   key_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
   # Path to the private key PEM file downloaded from ABM
