@@ -7,10 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
+	snipeit "github.com/michellepellon/go-snipeit"
 	"github.com/sirupsen/logrus"
 	"github.com/zchee/abm"
 
@@ -37,11 +38,10 @@ type Stats struct {
 	ModelNew int
 }
 
-// ABMCache holds cached ABM device and AppleCare data.
+// ABMCache holds cached ABM device and AppleCare data loaded from the cache directory.
 type ABMCache struct {
-	Timestamp time.Time                               `json:"timestamp"`
-	Devices   []abmclient.Device                      `json:"devices"`
-	AppleCare map[string]*abmclient.AppleCareCoverage `json:"applecare"` // device ID -> coverage
+	Devices   []abmclient.Device
+	AppleCare map[string]*abmclient.AppleCareCoverage // device ID -> coverage
 }
 
 // Engine performs the sync between ABM and Snipe-IT.
@@ -54,7 +54,6 @@ type Engine struct {
 	suppliers map[string]int // supplier name (lowercased) -> snipe supplier ID
 	stats     Stats
 	cache     *ABMCache // populated when using --use-cache
-	saveCache string    // path to write cache to (when --save-cache is set)
 }
 
 // NewEngine creates a new sync engine.
@@ -82,15 +81,20 @@ func NewDownloadEngine(abmClient *abmclient.Client, cfg *config.Config) *Engine 
 	}
 }
 
-// SetSaveCache sets the path to write ABM cache to after fetching.
-func (e *Engine) SetSaveCache(path string) {
-	e.saveCache = path
+// CacheDir returns the configured cache directory, defaulting to ".cache".
+func (e *Engine) CacheDir() string {
+	if e.cfg.Sync.CacheDir != "" {
+		return e.cfg.Sync.CacheDir
+	}
+	return ".cache"
 }
 
 // FetchAndSaveCache fetches all devices and AppleCare coverage from ABM
-// and writes them to a JSON cache file. Does not require a Snipe-IT client.
-func (e *Engine) FetchAndSaveCache(ctx context.Context, path string) error {
-	e.saveCache = path
+// and writes them to the cache directory as individual JSON files.
+// Each section is saved immediately after fetching so that partial data
+// is preserved if a later stage fails or is interrupted.
+func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
+	cacheDir := e.CacheDir()
 
 	log.Info("Fetching all devices from ABM...")
 	devices, _, err := e.abm.GetAllDevices(ctx)
@@ -100,25 +104,26 @@ func (e *Engine) FetchAndSaveCache(ctx context.Context, path string) error {
 	log.Infof("Fetched %d devices from Apple Business Manager", len(devices))
 
 	// Filter by product family if configured
-	if len(e.cfg.Sync.ProductFamilies) > 0 {
-		families := make(map[string]bool)
-		for _, f := range e.cfg.Sync.ProductFamilies {
-			families[strings.ToLower(f)] = true
-		}
-		var filtered []abmclient.Device
-		for _, d := range devices {
-			if d.Attributes != nil && families[strings.ToLower(string(d.Attributes.ProductFamily))] {
-				filtered = append(filtered, d)
-			}
-		}
-		log.Infof("Filtered to %d devices (from %d) by product family: %v", len(filtered), len(devices), e.cfg.Sync.ProductFamilies)
-		devices = filtered
+	devices = e.filterByProductFamily(devices)
+
+	// Save devices immediately
+	if err := writeJSON(cacheDir, "devices.json", devices); err != nil {
+		return fmt.Errorf("writing devices cache: %w", err)
 	}
+	log.Infof("Saved %d devices to %s/devices.json", len(devices), cacheDir)
 
 	log.Info("Fetching AppleCare coverage for all devices...")
 	appleCareMap := make(map[string]*abmclient.AppleCareCoverage)
 	for i, d := range devices {
 		if err := ctx.Err(); err != nil {
+			// Save partial AppleCare data before returning
+			if len(appleCareMap) > 0 {
+				if wErr := writeJSON(cacheDir, "applecare.json", appleCareMap); wErr != nil {
+					log.WithError(wErr).Warn("Could not save partial AppleCare cache")
+				} else {
+					log.Infof("Saved partial AppleCare cache (%d/%d devices) to %s/applecare.json", len(appleCareMap), len(devices), cacheDir)
+				}
+			}
 			return err
 		}
 		ac, err := e.abm.GetAppleCareCoverage(ctx, d.ID)
@@ -132,46 +137,78 @@ func (e *Engine) FetchAndSaveCache(ctx context.Context, path string) error {
 		}
 	}
 
-	if err := e.writeCache(devices, appleCareMap); err != nil {
-		return fmt.Errorf("writing cache: %w", err)
+	if err := writeJSON(cacheDir, "applecare.json", appleCareMap); err != nil {
+		return fmt.Errorf("writing applecare cache: %w", err)
 	}
 
-	log.Infof("Saved %d devices and %d AppleCare records to %s", len(devices), len(appleCareMap), path)
+	log.Infof("Saved %d devices and %d AppleCare records to %s/", len(devices), len(appleCareMap), cacheDir)
 	return nil
 }
 
-// LoadCache reads ABM cache from a JSON file.
-func (e *Engine) LoadCache(path string) error {
-	data, err := os.ReadFile(path)
+// LoadCache reads ABM cache from individual JSON files in the cache directory.
+func (e *Engine) LoadCache() error {
+	cacheDir := e.CacheDir()
+
+	devicesPath := filepath.Join(cacheDir, "devices.json")
+	data, err := os.ReadFile(devicesPath)
 	if err != nil {
-		return fmt.Errorf("reading cache file: %w", err)
+		return fmt.Errorf("reading %s: %w", devicesPath, err)
 	}
-	var cache ABMCache
-	if err := json.Unmarshal(data, &cache); err != nil {
-		return fmt.Errorf("parsing cache file: %w", err)
+	var devices []abmclient.Device
+	if err := json.Unmarshal(data, &devices); err != nil {
+		return fmt.Errorf("parsing %s: %w", devicesPath, err)
 	}
-	log.Infof("Loaded cache from %s (%d devices, %d AppleCare records, cached at %s)",
-		path, len(cache.Devices), len(cache.AppleCare), cache.Timestamp.Format(time.RFC3339))
-	e.cache = &cache
-	return nil
-}
 
-// writeCache saves ABM data to a JSON cache file.
-func (e *Engine) writeCache(devices []abmclient.Device, appleCare map[string]*abmclient.AppleCareCoverage) error {
-	cache := ABMCache{
-		Timestamp: time.Now(),
+	appleCareMap := make(map[string]*abmclient.AppleCareCoverage)
+	acPath := filepath.Join(cacheDir, "applecare.json")
+	acData, err := os.ReadFile(acPath)
+	if err != nil {
+		log.Warnf("Could not read %s, continuing without AppleCare cache: %v", acPath, err)
+	} else if err := json.Unmarshal(acData, &appleCareMap); err != nil {
+		log.Warnf("Could not parse %s, continuing without AppleCare cache: %v", acPath, err)
+	}
+
+	log.Infof("Loaded cache from %s/ (%d devices, %d AppleCare records)", cacheDir, len(devices), len(appleCareMap))
+	e.cache = &ABMCache{
 		Devices:   devices,
-		AppleCare: appleCare,
+		AppleCare: appleCareMap,
 	}
-	data, err := json.MarshalIndent(cache, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshaling cache: %w", err)
-	}
-	if err := os.WriteFile(e.saveCache, data, 0644); err != nil {
-		return fmt.Errorf("writing cache file: %w", err)
-	}
-	log.Infof("Saved cache to %s (%d devices, %d AppleCare records)", e.saveCache, len(devices), len(appleCare))
 	return nil
+}
+
+// writeJSON writes a value as indented JSON to a file in the given directory.
+func writeJSON(dir, filename string, v any) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("creating cache dir: %w", err)
+	}
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling %s: %w", filename, err)
+	}
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	return nil
+}
+
+// filterByProductFamily filters devices by configured product families.
+func (e *Engine) filterByProductFamily(devices []abmclient.Device) []abmclient.Device {
+	if len(e.cfg.Sync.ProductFamilies) == 0 {
+		return devices
+	}
+	families := make(map[string]bool)
+	for _, f := range e.cfg.Sync.ProductFamilies {
+		families[strings.ToLower(f)] = true
+	}
+	var filtered []abmclient.Device
+	for _, d := range devices {
+		if d.Attributes != nil && families[strings.ToLower(string(d.Attributes.ProductFamily))] {
+			filtered = append(filtered, d)
+		}
+	}
+	log.Infof("Filtered to %d devices (from %d) by product family: %v", len(filtered), len(devices), e.cfg.Sync.ProductFamilies)
+	return filtered
 }
 
 // RunSingle syncs a single device identified by serial number.
@@ -268,7 +305,7 @@ func (e *Engine) Run(ctx context.Context) (*Stats, error) {
 // loadModels fetches all models from Snipe-IT and builds a lookup map.
 // Models are indexed by both model number and name for flexible matching.
 func (e *Engine) loadModels(ctx context.Context) error {
-	models, err := e.snipe.ListModels(ctx)
+	models, err := e.snipe.ListAllModels(ctx)
 	if err != nil {
 		return err
 	}
@@ -285,7 +322,7 @@ func (e *Engine) loadModels(ctx context.Context) error {
 
 // loadSuppliers fetches all suppliers from Snipe-IT and builds a lookup map.
 func (e *Engine) loadSuppliers(ctx context.Context) error {
-	suppliers, err := e.snipe.ListSuppliers(ctx)
+	suppliers, err := e.snipe.ListAllSuppliers(ctx)
 	if err != nil {
 		return err
 	}
@@ -390,48 +427,7 @@ func (e *Engine) fetchABMDevices(ctx context.Context) ([]abmclient.Device, error
 	}
 
 	// Filter by product family if configured
-	if len(e.cfg.Sync.ProductFamilies) > 0 {
-		families := make(map[string]bool)
-		for _, f := range e.cfg.Sync.ProductFamilies {
-			families[strings.ToLower(f)] = true
-		}
-		var filtered []abmclient.Device
-		for _, d := range allDevices {
-			if d.Attributes != nil && families[strings.ToLower(string(d.Attributes.ProductFamily))] {
-				filtered = append(filtered, d)
-			}
-		}
-		log.Infof("Filtered to %d devices (from %d) by product family: %v", len(filtered), len(allDevices), e.cfg.Sync.ProductFamilies)
-		allDevices = filtered
-	}
-
-	// If saving cache, prefetch all AppleCare data and write cache
-	if e.saveCache != "" && e.cache == nil {
-		log.Info("Fetching AppleCare coverage for all devices (for cache)...")
-		appleCareMap := make(map[string]*abmclient.AppleCareCoverage)
-		for i, d := range allDevices {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			ac, err := e.abm.GetAppleCareCoverage(ctx, d.ID)
-			if err != nil {
-				log.WithError(err).WithField("device_id", d.ID).Debug("Could not fetch AppleCare coverage")
-			} else if ac != nil {
-				appleCareMap[d.ID] = ac
-			}
-			if (i+1)%50 == 0 {
-				log.Infof("AppleCare progress: %d/%d devices", i+1, len(allDevices))
-			}
-		}
-		if err := e.writeCache(allDevices, appleCareMap); err != nil {
-			log.WithError(err).Warn("Failed to write cache")
-		}
-		// Store in memory so processDevice can use it
-		e.cache = &ABMCache{
-			Devices:   allDevices,
-			AppleCare: appleCareMap,
-		}
-	}
+	allDevices = e.filterByProductFamily(allDevices)
 
 	return allDevices, nil
 }
@@ -501,7 +497,7 @@ func (e *Engine) processDevice(ctx context.Context, device abmclient.Device) err
 		return e.createAsset(ctx, logger, device, modelID, supplierID, appleCare)
 	case 1:
 		// Update existing asset — model already assigned in Snipe-IT
-		return e.updateAsset(ctx, logger, device, existing.Rows[0], supplierID, appleCare)
+		return e.updateAsset(ctx, logger, device, &existing.Rows[0], supplierID, appleCare)
 	default:
 		logger.Warnf("Multiple assets (%d) found for serial, skipping", existing.Total)
 		e.stats.Skipped++
@@ -566,12 +562,16 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 		return 0, nil
 	}
 
-	newModel, err := e.snipe.CreateModel(ctx, snipe.SnipeModel{
-		Name:           modelName,
-		ModelNumber:    modelNumber,
-		CategoryID:     e.cfg.SnipeIT.CategoryIDForFamily(string(attrs.ProductFamily)),
-		ManufacturerID: e.cfg.SnipeIT.ManufacturerID,
-		FieldsetID:     e.cfg.SnipeIT.CustomFieldsetID,
+	newModel, err := e.snipe.CreateModel(ctx, snipeit.Model{
+		CommonFields: snipeit.CommonFields{Name: modelName},
+		ModelNumber:  modelNumber,
+		Category: snipeit.Category{
+			CommonFields: snipeit.CommonFields{ID: e.cfg.SnipeIT.CategoryIDForFamily(string(attrs.ProductFamily))},
+		},
+		Manufacturer: snipeit.Manufacturer{
+			CommonFields: snipeit.CommonFields{ID: e.cfg.SnipeIT.ManufacturerID},
+		},
+		FieldsetID: e.cfg.SnipeIT.CustomFieldsetID,
 	})
 	if err != nil {
 		return 0, err
@@ -592,11 +592,19 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 // createAsset creates a new asset in Snipe-IT from ABM device data.
 func (e *Engine) createAsset(ctx context.Context, logger *logrus.Entry, device abmclient.Device, modelID int, supplierID int, appleCare *abmclient.AppleCareCoverage) error {
 	attrs := device.Attributes
-	payload := map[string]any{
-		"serial":    attrs.SerialNumber,
-		"model_id":  modelID,
-		"status_id": e.cfg.SnipeIT.DefaultStatusID,
-		"asset_tag": attrs.SerialNumber,
+
+	asset := snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: make(map[string]string),
+		},
+		Serial:   attrs.SerialNumber,
+		AssetTag: attrs.SerialNumber,
+		Model: snipeit.Model{
+			CommonFields: snipeit.CommonFields{ID: modelID},
+		},
+		StatusLabel: snipeit.StatusLabel{
+			CommonFields: snipeit.CommonFields{ID: e.cfg.SnipeIT.DefaultStatusID},
+		},
 	}
 
 	if e.cfg.Sync.SetName {
@@ -605,31 +613,26 @@ func (e *Engine) createAsset(ctx context.Context, logger *logrus.Entry, device a
 			name = fmt.Sprintf("%s (%s)", name, titleCase(attrs.Color))
 		}
 		if name != "" {
-			payload["name"] = name
+			asset.Name = name
 		}
 	}
 
 	if supplierID > 0 {
-		payload["supplier_id"] = supplierID
+		asset.Supplier = snipeit.Supplier{
+			CommonFields: snipeit.CommonFields{ID: supplierID},
+		}
 	}
 
-	e.applyFieldMapping(payload, device, appleCare)
+	e.applyFieldMapping(&asset, device, appleCare)
 
 	if e.cfg.Sync.DryRun {
-		logger.WithField("payload", payload).Info("[DRY RUN] Would create asset")
+		logger.WithField("payload", asset).Info("[DRY RUN] Would create asset")
 		e.stats.Created++
 		return nil
 	}
 
-	resp, err := e.snipe.CreateAsset(ctx, payload)
-	if err != nil {
+	if _, err := e.snipe.CreateAsset(ctx, asset); err != nil {
 		return err
-	}
-
-	status, _ := resp["status"].(string)
-	if status != "success" {
-		msgs, _ := json.Marshal(resp["messages"])
-		return fmt.Errorf("asset creation failed: %s", string(msgs))
 	}
 
 	logger.Info("Created asset in Snipe-IT")
@@ -644,107 +647,97 @@ func (e *Engine) createAsset(ctx context.Context, logger *logrus.Entry, device a
 }
 
 // updateAsset updates an existing Snipe-IT asset with current ABM data.
-func (e *Engine) updateAsset(ctx context.Context, logger *logrus.Entry, device abmclient.Device, existing map[string]any, supplierID int, appleCare *abmclient.AppleCareCoverage) error {
-	snipeID, ok := existing["id"].(float64)
-	if !ok {
-		return fmt.Errorf("could not get asset ID from Snipe response")
+func (e *Engine) updateAsset(ctx context.Context, logger *logrus.Entry, device abmclient.Device, existing *snipeit.Asset, supplierID int, appleCare *abmclient.AppleCareCoverage) error {
+	desired := snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: make(map[string]string),
+		},
 	}
 
-	desired := make(map[string]any)
 	if supplierID > 0 {
-		desired["supplier_id"] = supplierID
+		desired.Supplier = snipeit.Supplier{
+			CommonFields: snipeit.CommonFields{ID: supplierID},
+		}
 	}
-	e.applyFieldMapping(desired, device, appleCare)
 
-	if len(desired) == 0 {
-		logger.Info("No updates needed")
-		e.stats.Skipped++
-		return nil
-	}
+	e.applyFieldMapping(&desired, device, appleCare)
 
 	// Unless force mode, compare desired values against current Snipe-IT values
 	// and only send fields that are missing or different.
-	updates := desired
+	update := &desired
 	if !e.cfg.Sync.Force {
-		updates = e.diffFields(desired, existing)
-		if len(updates) == 0 {
+		update = e.diffAsset(&desired, existing)
+		if update == nil {
 			logger.Debug("All fields already match, skipping update")
 			e.stats.Skipped++
 			return nil
 		}
-		logger.WithField("changed_fields", len(updates)).Debug("Fields need updating")
 	}
 
 	if e.cfg.Sync.DryRun {
 		logger.WithFields(logrus.Fields{
-			"snipe_id": int(snipeID),
-			"updates":  updates,
+			"snipe_id": existing.ID,
+			"updates":  formatAssetDiff(update),
 		}).Info("[DRY RUN] Would update asset")
 		e.stats.Updated++
 		return nil
 	}
 
-	logger.WithField("payload", updates).Debug("Sending update to Snipe-IT")
+	logger.WithField("payload", update).Debug("Sending update to Snipe-IT")
 
-	resp, err := e.snipe.UpdateAsset(ctx, int(snipeID), updates)
-	if err != nil {
+	if _, err := e.snipe.PatchAsset(ctx, existing.ID, *update); err != nil {
 		return err
 	}
 
-	logger.WithFields(logrus.Fields{
-		"fields":   len(updates),
-		"response": resp,
-	}).Debug("Snipe-IT update response")
 	logger.Info("Updated asset in Snipe-IT")
 	e.stats.Updated++
 	return nil
 }
 
-// diffFields compares desired field values against the existing Snipe-IT asset
-// and returns only the fields that are missing or different.
-func (e *Engine) diffFields(desired map[string]any, existing map[string]any) map[string]any {
-	// Extract custom_fields from the existing asset (map of DB column -> {value, field, field_format})
-	customFields, _ := existing["custom_fields"].(map[string]any)
+// diffAsset compares desired asset values against the existing Snipe-IT asset
+// and returns an asset containing only the fields that differ, or nil if everything matches.
+func (e *Engine) diffAsset(desired *snipeit.Asset, existing *snipeit.Asset) *snipeit.Asset {
+	diff := snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: make(map[string]string),
+		},
+	}
+	hasChanges := false
 
-	changed := make(map[string]any)
-	for key, desiredVal := range desired {
-		desiredStr := fmt.Sprintf("%v", desiredVal)
+	// Compare supplier ID
+	if desired.Supplier.ID != 0 && desired.Supplier.ID != existing.Supplier.ID {
+		diff.Supplier = desired.Supplier
+		hasChanges = true
+	}
 
-		var currentStr string
-		if strings.HasPrefix(key, "_snipeit_") {
-			// Custom field — look up in custom_fields map
-			if customFields != nil {
-				if fieldObj, ok := customFields[key].(map[string]any); ok {
-					currentStr = fmt.Sprintf("%v", fieldObj["value"])
-				}
-			}
-		} else if strings.HasSuffix(key, "_id") {
-			// Snipe-IT returns related objects as nested maps (e.g. supplier: {id: 3, name: "CDW"}).
-			// The corresponding key without _id suffix holds the nested object.
-			relKey := strings.TrimSuffix(key, "_id")
-			if obj, ok := existing[relKey].(map[string]any); ok {
-				if id, ok := obj["id"].(float64); ok {
-					currentStr = fmt.Sprintf("%v", int(id))
-				}
-			}
-		} else {
-			// Standard field — look up at top level
-			if v, ok := existing[key]; ok && v != nil {
-				currentStr = fmt.Sprintf("%v", v)
-			}
-		}
+	// Compare warranty months
+	if desired.WarrantyMonths != 0 && desired.WarrantyMonths != existing.WarrantyMonths {
+		diff.WarrantyMonths = desired.WarrantyMonths
+		hasChanges = true
+	}
 
-		if currentStr != desiredStr {
-			changed[key] = desiredVal
+	// Compare custom fields
+	for key, desiredVal := range desired.CustomFields {
+		currentVal := existing.CustomFields[key]
+		if currentVal != desiredVal {
+			diff.CustomFields[key] = desiredVal
+			hasChanges = true
 		}
 	}
-	return changed
+
+	if !hasChanges {
+		return nil
+	}
+	return &diff
 }
 
 // applyFieldMapping applies user-configured field mappings from config.
 // All field mappings — ABM device attributes, AppleCare coverage, and standard
 // Snipe-IT fields like purchase_date — are driven entirely by settings.yaml.
-func (e *Engine) applyFieldMapping(payload map[string]any, device abmclient.Device, ac *abmclient.AppleCareCoverage) {
+// Custom field keys (starting with _snipeit_) go into Asset.CustomFields;
+// all other mapped values also go into CustomFields since Snipe-IT treats
+// them as top-level keys on write.
+func (e *Engine) applyFieldMapping(asset *snipeit.Asset, device abmclient.Device, ac *abmclient.AppleCareCoverage) {
 	attrs := device.Attributes
 	for snipeField, abmField := range e.cfg.Sync.FieldMapping {
 		var value string
@@ -800,7 +793,7 @@ func (e *Engine) applyFieldMapping(payload map[string]any, device abmclient.Devi
 			}
 		case "ethernet_mac", "ethernetmac":
 			if len(attrs.EthernetMacAddress) > 0 {
-				value = formatMAC(strings.Join([]string(attrs.EthernetMacAddress), ", "))
+				value = formatMAC(strings.Join(attrs.EthernetMacAddress, ", "))
 			}
 		case "eid":
 			value = attrs.EID
@@ -846,7 +839,7 @@ func (e *Engine) applyFieldMapping(payload map[string]any, device abmclient.Devi
 			}
 		}
 		if value != "" {
-			payload[snipeField] = value
+			asset.CustomFields[snipeField] = value
 		}
 	}
 
@@ -855,7 +848,7 @@ func (e *Engine) applyFieldMapping(payload map[string]any, device abmclient.Devi
 	if ac != nil && !ac.EndDateTime.IsZero() && !attrs.OrderDateTime.IsZero() {
 		months := int(ac.EndDateTime.Sub(attrs.OrderDateTime).Hours() / (24 * 30))
 		if months > 0 {
-			payload["warranty_months"] = months
+			asset.WarrantyMonths = snipeit.FlexInt(months)
 		}
 	}
 }
@@ -916,4 +909,19 @@ func deviceSerial(d abmclient.Device) string {
 		return d.Attributes.SerialNumber
 	}
 	return d.ID
+}
+
+// formatAssetDiff returns a human-readable summary of an asset diff for logging.
+func formatAssetDiff(a *snipeit.Asset) map[string]any {
+	m := make(map[string]any)
+	if a.Supplier.ID != 0 {
+		m["supplier_id"] = a.Supplier.ID
+	}
+	if a.WarrantyMonths != 0 {
+		m["warranty_months"] = a.WarrantyMonths.Int()
+	}
+	for k, v := range a.CustomFields {
+		m[k] = v
+	}
+	return m
 }

@@ -19,7 +19,7 @@ func NewSyncCmd() *cobra.Command {
 
 	cmd.Flags().Bool("force", false, "Ignore timestamps, always update")
 	cmd.Flags().String("serial", "", "Sync a single device by serial number (implies --force)")
-	cmd.Flags().String("use-cache", "", "Use cached ABM data from JSON file instead of API")
+	cmd.Flags().Bool("use-cache", false, "Use cached data instead of fetching from ABM API")
 	cmd.Flags().Bool("update-only", false, "Only update existing assets, never create new ones")
 
 	return cmd
@@ -33,6 +33,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Apply sync-specific flag overrides
 	applyBoolFlag(cmd, "force", &Cfg.Sync.Force)
 	applyBoolFlag(cmd, "update-only", &Cfg.Sync.UpdateOnly)
+	applyBoolFlag(cmd, "use-cache", &Cfg.Sync.UseCache)
 
 	if Cfg.Sync.DryRun {
 		log.Info("Running in DRY RUN mode - no changes will be made")
@@ -53,9 +54,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	engine := axmsync.NewEngine(abmClient, snipeClient, Cfg)
 
-	useCache, _ := cmd.Flags().GetString("use-cache")
-	if useCache != "" {
-		if err := engine.LoadCache(useCache); err != nil {
+	if Cfg.Sync.UseCache {
+		if err := engine.LoadCache(); err != nil {
 			return fmt.Errorf("loading cache: %w", err)
 		}
 	}

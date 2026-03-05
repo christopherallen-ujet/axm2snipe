@@ -42,7 +42,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Info("Testing Snipe-IT connection...")
-	models, err := snipeClient.ListModels(ctx)
+	models, err := snipeClient.ListAllModels(ctx)
 	if err != nil {
 		return fmt.Errorf("Snipe-IT connection failed: %w", err)
 	}

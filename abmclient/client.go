@@ -4,11 +4,8 @@
 package abmclient
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -22,58 +19,13 @@ func SetLogLevel(level logrus.Level) {
 	log.SetLevel(level)
 }
 
-// retryTransport wraps an http.RoundTripper with retry logic for 429 responses.
-// This is needed because the abm library's PageIterator makes raw HTTP calls
-// that bypass the doJSONRequest retry logic.
-type retryTransport struct {
-	base       http.RoundTripper
-	maxRetries int
-	initial    time.Duration
-}
-
-func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	backoff := t.initial
-	var bodyBytes []byte
-	if req.Body != nil {
-		var err error
-		bodyBytes, err = io.ReadAll(req.Body)
-		if err != nil {
-			return nil, err
-		}
-		req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-	}
-
-	for attempt := 0; ; attempt++ {
-		resp, err := t.base.RoundTrip(req)
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode != http.StatusTooManyRequests || attempt >= t.maxRetries {
-			return resp, nil
-		}
-		resp.Body.Close()
-		log.Debugf("Rate limited (429), retrying in %v (attempt %d/%d)", backoff, attempt+1, t.maxRetries)
-
-		select {
-		case <-req.Context().Done():
-			return nil, req.Context().Err()
-		case <-time.After(backoff):
-		}
-		backoff *= 2
-
-		// Reset body for retry
-		if bodyBytes != nil {
-			req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-		}
-	}
-}
-
 // Client wraps an abm.Client with axm2snipe-specific helpers.
 type Client struct {
 	abm *abm.Client
 }
 
 // NewClient creates a new ABM client using the abm library for auth.
+// Rate limiting and retry logic are handled by the upstream abm library.
 func NewClient(ctx context.Context, clientID, keyID, privateKey string) (*Client, error) {
 	assertion, err := abm.NewAssertion(ctx, clientID, keyID, privateKey)
 	if err != nil {
@@ -85,15 +37,7 @@ func NewClient(ctx context.Context, clientID, keyID, privateKey string) (*Client
 		return nil, fmt.Errorf("creating ABM token source: %w", err)
 	}
 
-	httpClient := &http.Client{
-		Transport: &retryTransport{
-			base:       http.DefaultTransport,
-			maxRetries: 5,
-			initial:    2 * time.Second,
-		},
-	}
-
-	client, err := abm.NewClient(httpClient, ts)
+	client, err := abm.NewClient(nil, ts)
 	if err != nil {
 		return nil, fmt.Errorf("creating ABM client: %w", err)
 	}

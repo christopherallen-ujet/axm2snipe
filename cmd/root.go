@@ -49,6 +49,7 @@ func LoadConfig(cmd *cobra.Command) error {
 	applyBoolFlag(cmd, "dry-run", &Cfg.Sync.DryRun)
 	applyBoolFlag(cmd, "force", &Cfg.Sync.Force)
 	applyBoolFlag(cmd, "update-only", &Cfg.Sync.UpdateOnly)
+	applyStringFlag(cmd, "cache-dir", &Cfg.Sync.CacheDir)
 
 	// Configure log level
 	switch {
@@ -143,16 +144,25 @@ func Execute() {
 	downloadCmd := NewDownloadCmd()
 	setupCmd := NewSetupCmd()
 	testCmd := NewTestCmd()
+	accessTokenCmd := NewAccessTokenCmd()
+	requestCmd := NewRequestCmd()
 
 	// --dry-run: sync, setup
 	for _, cmd := range []*cobra.Command{syncCmd, setupCmd} {
 		cmd.Flags().Bool("dry-run", false, "Simulate without making changes")
 	}
 
+	// --cache-dir: download, sync
+	for _, cmd := range []*cobra.Command{downloadCmd, syncCmd} {
+		cmd.Flags().String("cache-dir", "", `Directory for cached API responses (default ".cache")`)
+	}
+
 	rootCmd.AddCommand(syncCmd)
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(testCmd)
+	rootCmd.AddCommand(accessTokenCmd)
+	rootCmd.AddCommand(requestCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

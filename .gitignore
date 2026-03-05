@@ -4,8 +4,8 @@ axm2snipe
 # Config with secrets
 settings.yaml
 
-# ABM cache files
-*.cache.json
+# ABM cache directory
+.cache/
 
 # Private keys
 *.pem

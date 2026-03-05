@@ -46,6 +46,8 @@ type SyncConfig struct {
 	Force            bool              `yaml:"force"`             // ignore timestamps, always update
 	RateLimit        bool              `yaml:"rate_limit"`        // enable rate limiting
 	UpdateOnly       bool              `yaml:"update_only"`       // only update existing assets, never create new ones
+	UseCache         bool              `yaml:"use_cache"`         // use cached data instead of fetching from ABM API
+	CacheDir         string            `yaml:"cache_dir"`         // directory for cached API responses (default ".cache")
 	ProductFamilies  []string          `yaml:"product_families"`  // filter by product family (Mac, iPhone, iPad, etc.)
 	SetName          bool              `yaml:"set_name"`          // set asset name on create (default false)
 	FieldMapping     map[string]string `yaml:"field_mapping"`     // snipe field -> ABM attribute mapping
