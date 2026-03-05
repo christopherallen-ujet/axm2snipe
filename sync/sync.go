@@ -73,9 +73,71 @@ func NewEngine(abmClient *abmclient.Client, snipeClient *snipe.Client, cfg *conf
 	}
 }
 
+// NewDownloadEngine creates a lightweight engine for downloading ABM data
+// without needing a Snipe-IT client.
+func NewDownloadEngine(abmClient *abmclient.Client, cfg *config.Config) *Engine {
+	return &Engine{
+		abm: abmClient,
+		cfg: cfg,
+	}
+}
+
 // SetSaveCache sets the path to write ABM cache to after fetching.
 func (e *Engine) SetSaveCache(path string) {
 	e.saveCache = path
+}
+
+// FetchAndSaveCache fetches all devices and AppleCare coverage from ABM
+// and writes them to a JSON cache file. Does not require a Snipe-IT client.
+func (e *Engine) FetchAndSaveCache(ctx context.Context, path string) error {
+	e.saveCache = path
+
+	log.Info("Fetching all devices from ABM...")
+	devices, _, err := e.abm.GetAllDevices(ctx)
+	if err != nil {
+		return fmt.Errorf("fetching ABM devices: %w", err)
+	}
+	log.Infof("Fetched %d devices from Apple Business Manager", len(devices))
+
+	// Filter by product family if configured
+	if len(e.cfg.Sync.ProductFamilies) > 0 {
+		families := make(map[string]bool)
+		for _, f := range e.cfg.Sync.ProductFamilies {
+			families[strings.ToLower(f)] = true
+		}
+		var filtered []abmclient.Device
+		for _, d := range devices {
+			if d.Attributes != nil && families[strings.ToLower(string(d.Attributes.ProductFamily))] {
+				filtered = append(filtered, d)
+			}
+		}
+		log.Infof("Filtered to %d devices (from %d) by product family: %v", len(filtered), len(devices), e.cfg.Sync.ProductFamilies)
+		devices = filtered
+	}
+
+	log.Info("Fetching AppleCare coverage for all devices...")
+	appleCareMap := make(map[string]*abmclient.AppleCareCoverage)
+	for i, d := range devices {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		ac, err := e.abm.GetAppleCareCoverage(ctx, d.ID)
+		if err != nil {
+			log.WithError(err).WithField("device_id", d.ID).Debug("Could not fetch AppleCare coverage")
+		} else if ac != nil {
+			appleCareMap[d.ID] = ac
+		}
+		if (i+1)%50 == 0 {
+			log.Infof("AppleCare progress: %d/%d devices", i+1, len(devices))
+		}
+	}
+
+	if err := e.writeCache(devices, appleCareMap); err != nil {
+		return fmt.Errorf("writing cache: %w", err)
+	}
+
+	log.Infof("Saved %d devices and %d AppleCare records to %s", len(devices), len(appleCareMap), path)
+	return nil
 }
 
 // LoadCache reads ABM cache from a JSON file.
@@ -193,7 +255,7 @@ func (e *Engine) Run(ctx context.Context) (*Stats, error) {
 		}
 
 		if (i+1)%50 == 0 {
-			log.Infof("Progress: %d/%d devices processed", i+1, len(devices))
+			log.WithFields(logrus.Fields{"progress": i + 1, "total": len(devices)}).Info("Processing devices")
 		}
 	}
 

@@ -81,15 +81,22 @@ func Load(path string) (*Config, error) {
 		cfg.SnipeIT.APIKey = v
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return nil, err
-	}
-
 	return cfg, nil
 }
 
-// Validate checks that all required fields are set.
+// Validate checks that all required fields are set for a full sync.
 func (c *Config) Validate() error {
+	if err := c.ValidateABM(); err != nil {
+		return err
+	}
+	if err := c.ValidateSnipeIT(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ValidateABM checks that ABM credentials are set.
+func (c *Config) ValidateABM() error {
 	if c.ABM.ClientID == "" {
 		return fmt.Errorf("abm.client_id is required")
 	}
@@ -99,6 +106,11 @@ func (c *Config) Validate() error {
 	if c.ABM.PrivateKey == "" {
 		return fmt.Errorf("abm.private_key is required")
 	}
+	return nil
+}
+
+// ValidateSnipeIT checks that Snipe-IT credentials and required IDs are set.
+func (c *Config) ValidateSnipeIT() error {
 	if c.SnipeIT.URL == "" {
 		return fmt.Errorf("snipe_it.url is required")
 	}
