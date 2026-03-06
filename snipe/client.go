@@ -6,11 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	snipeit "github.com/CampusTech/go-snipeit"
 )
+
+var log = logrus.New()
+
+// SetLogLevel sets the logger level for the snipe package.
+func SetLogLevel(level logrus.Level) {
+	log.SetLevel(level)
+}
 
 // ErrDryRun is returned when a write operation is attempted in dry-run mode.
 var ErrDryRun = fmt.Errorf("write blocked: dry-run mode is enabled")
@@ -147,7 +154,7 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 		// Parse field-level validation errors and retry without the rejected fields.
 		rejected := fieldsetErrors(string(resp.Message))
 		if len(rejected) > 0 && asset.CustomFields != nil {
-			log.Printf("asset %d: model fieldset missing custom fields %v — retrying without them", id, rejected)
+			log.WithField("asset_id", id).WithField("fields", rejected).Warn("Asset model is missing fieldset for custom fields — retrying update without them. Associate the axm2snipe fieldset with this model in Snipe-IT to fix this.")
 			for _, key := range rejected {
 				delete(asset.CustomFields, key)
 			}
