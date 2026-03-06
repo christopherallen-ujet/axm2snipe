@@ -757,6 +757,10 @@ func (e *Engine) updateAsset(ctx context.Context, logger *logrus.Entry, device a
 		}
 	}
 
+	// Seed notes from existing asset so applyWarrantyNotes replaces only the
+	// sentinel block and leaves any manual notes outside the block intact.
+	desired.Notes = existing.Notes
+
 	e.applyFieldMapping(&desired, device, coverage)
 	applyWarrantyNotes(&desired, coverage)
 
@@ -814,7 +818,9 @@ func (e *Engine) diffAsset(desired *snipeit.Asset, existing *snipeit.Asset) *sni
 		hasChanges = true
 	}
 
-	// Compare notes (only the sentinel block portion)
+	// Compare full notes string; desired.Notes already contains the existing
+	// content with only the sentinel block replaced, so a difference here means
+	// the warranty block changed.
 	if desired.Notes != "" && desired.Notes != existing.Notes {
 		diff.Notes = desired.Notes
 		hasChanges = true
@@ -1076,6 +1082,9 @@ func formatAssetDiff(a *snipeit.Asset) map[string]any {
 	}
 	if a.WarrantyMonths != 0 {
 		m["warranty_months"] = a.WarrantyMonths.Int()
+	}
+	if a.Notes != "" {
+		m["notes"] = a.Notes
 	}
 	for k, v := range a.CustomFields {
 		m[k] = v
