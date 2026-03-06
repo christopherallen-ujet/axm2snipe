@@ -152,7 +152,7 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 	}
 	if resp.Status != "success" {
 		// Parse field-level validation errors and retry without the rejected fields.
-		rejected := fieldsetErrors(string(resp.Message))
+		rejected, reason := invalidFieldErrors(string(resp.Message))
 		if len(rejected) > 0 && asset.CustomFields != nil {
 			log.WithFields(logrus.Fields{
 				"asset_id":    id,
@@ -160,7 +160,8 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 				"model_name":  asset.Model.Name,
 				"fieldset_id": asset.Model.FieldsetID,
 				"fields":      rejected,
-			}).Warn("Asset model is missing fieldset for custom fields — retrying update without them. Associate the axm2snipe fieldset with this model in Snipe-IT to fix this.")
+				"reason":      reason,
+			}).Warn("Snipe-IT rejected custom fields — retrying update without them. Run 'axm2snipe setup' to fix field configuration.")
 			// Copy CustomFields to avoid mutating the caller's map.
 			fieldsCopy := make(map[string]string, len(asset.CustomFields))
 			for k, v := range asset.CustomFields {
@@ -184,24 +185,33 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 	return &resp.Payload, nil
 }
 
-// fieldsetErrors parses a Snipe-IT validation error message and returns the
-// custom field keys that were rejected because they are not in the model's fieldset.
-func fieldsetErrors(msg string) []string {
-	// Message is a JSON object: {"_snipeit_foo_1": ["This field seems to exist..."]}
+// invalidFieldErrors parses a Snipe-IT validation error message and returns
+// the custom field keys that should be stripped on retry, along with a short
+// reason string describing why. Two error patterns are handled:
+//   - "not available on this Asset Model's fieldset" — field not in the model's fieldset
+//   - "is invalid." — field value not in the field's allowed options list
+func invalidFieldErrors(msg string) ([]string, string) {
+	// Message is a JSON object: {"_snipeit_foo_1": ["..."]}
 	var errs map[string][]string
 	if err := json.Unmarshal([]byte(msg), &errs); err != nil {
-		return nil
+		return nil, ""
 	}
 	var rejected []string
+	reason := ""
 	for key, msgs := range errs {
 		for _, m := range msgs {
-			if strings.Contains(m, "not available on this Asset Model's fieldset") {
+			switch {
+			case strings.Contains(m, "not available on this Asset Model's fieldset"):
 				rejected = append(rejected, key)
-				break
+				reason = "fieldset missing"
+			case strings.Contains(m, "is invalid."):
+				rejected = append(rejected, key)
+				reason = "invalid field value"
 			}
+			break
 		}
 	}
-	return rejected
+	return rejected, reason
 }
 
 // --- Custom fields setup ---
