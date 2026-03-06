@@ -96,12 +96,22 @@ func (e *Engine) CacheDir() string {
 // Each section is saved immediately after fetching so that partial data
 // is preserved if a later stage fails or is interrupted.
 func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
+	devices, err := e.FetchAndSaveDevices(ctx)
+	if err != nil {
+		return err
+	}
+	return e.FetchAndSaveAppleCare(ctx, devices)
+}
+
+// FetchAndSaveDevices fetches devices from ABM, applies configured filters,
+// writes devices.json, and returns the device list for further use.
+func (e *Engine) FetchAndSaveDevices(ctx context.Context) ([]abmclient.Device, error) {
 	cacheDir := e.CacheDir()
 
 	log.Info("Fetching all devices from ABM...")
 	devices, _, err := e.abm.GetAllDevices(ctx)
 	if err != nil {
-		return fmt.Errorf("fetching ABM devices: %w", err)
+		return nil, fmt.Errorf("fetching ABM devices: %w", err)
 	}
 	log.Infof("Fetched %d devices from Apple Business Manager", len(devices))
 
@@ -122,11 +132,26 @@ func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
 		log.Warn("sync.mdm_only_cache is enabled but sync.mdm_only is false; cache filtering will be skipped")
 	}
 
-	// Save devices immediately
 	if err := writeJSON(cacheDir, "devices.json", devices); err != nil {
-		return fmt.Errorf("writing devices cache: %w", err)
+		return nil, fmt.Errorf("writing devices cache: %w", err)
 	}
 	log.Infof("Saved %d devices to %s/devices.json", len(devices), cacheDir)
+	return devices, nil
+}
+
+// FetchAndSaveAppleCare fetches AppleCare coverage for the given device list
+// and writes applecare.json. If devices is nil, it loads devices from cache.
+func (e *Engine) FetchAndSaveAppleCare(ctx context.Context, devices []abmclient.Device) error {
+	cacheDir := e.CacheDir()
+
+	if devices == nil {
+		// Load devices from existing cache when only refreshing AppleCare
+		if err := e.LoadCache(); err != nil {
+			return fmt.Errorf("loading device cache for AppleCare refresh: %w", err)
+		}
+		devices = e.cache.Devices
+		log.Infof("Loaded %d devices from cache for AppleCare refresh", len(devices))
+	}
 
 	log.Info("Fetching AppleCare coverage for all devices...")
 	appleCareMap := e.fetchAppleCareParallel(ctx, devices)
@@ -138,8 +163,7 @@ func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
 	if err := writeJSON(cacheDir, "applecare.json", appleCareMap); err != nil {
 		return fmt.Errorf("writing applecare cache: %w", err)
 	}
-
-	log.Infof("Saved %d devices and %d AppleCare records to %s/", len(devices), len(appleCareMap), cacheDir)
+	log.Infof("Saved %d AppleCare records to %s/applecare.json", len(appleCareMap), cacheDir)
 	return nil
 }
 
