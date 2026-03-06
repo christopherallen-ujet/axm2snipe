@@ -4,7 +4,9 @@ package snipe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	snipeit "github.com/CampusTech/go-snipeit"
@@ -130,6 +132,9 @@ func (c *Client) CreateAsset(ctx context.Context, asset snipeit.Asset) (*snipeit
 }
 
 // PatchAsset partially updates an existing hardware asset by ID.
+// If Snipe-IT rejects custom fields because they are not in the asset model's
+// fieldset, those fields are stripped and the update is retried once so that
+// the non-custom-field data (name, serial, warranty, etc.) still gets applied.
 func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*snipeit.Asset, error) {
 	if c.DryRun {
 		return nil, ErrDryRun
@@ -139,9 +144,45 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 		return nil, fmt.Errorf("updating asset %d: %w", id, err)
 	}
 	if resp.Status != "success" {
+		// Parse field-level validation errors and retry without the rejected fields.
+		rejected := fieldsetErrors(string(resp.Message))
+		if len(rejected) > 0 && asset.CustomFields != nil {
+			log.Printf("asset %d: model fieldset missing custom fields %v — retrying without them", id, rejected)
+			for _, key := range rejected {
+				delete(asset.CustomFields, key)
+			}
+			resp, _, err = c.Assets.PatchContext(ctx, id, asset)
+			if err != nil {
+				return nil, fmt.Errorf("updating asset %d: %w", id, err)
+			}
+			if resp.Status != "success" {
+				return nil, fmt.Errorf("updating asset %d failed: %s", id, resp.Message)
+			}
+			return &resp.Payload, nil
+		}
 		return nil, fmt.Errorf("updating asset %d failed: %s", id, resp.Message)
 	}
 	return &resp.Payload, nil
+}
+
+// fieldsetErrors parses a Snipe-IT validation error message and returns the
+// custom field keys that were rejected because they are not in the model's fieldset.
+func fieldsetErrors(msg string) []string {
+	// Message is a JSON object: {"_snipeit_foo_1": ["This field seems to exist..."]}
+	var errs map[string][]string
+	if err := json.Unmarshal([]byte(msg), &errs); err != nil {
+		return nil
+	}
+	var rejected []string
+	for key, msgs := range errs {
+		for _, m := range msgs {
+			if strings.Contains(m, "not available on this Asset Model's fieldset") {
+				rejected = append(rejected, key)
+				break
+			}
+		}
+	}
+	return rejected
 }
 
 // --- Custom fields setup ---
