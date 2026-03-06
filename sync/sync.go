@@ -820,6 +820,12 @@ func (e *Engine) updateAsset(ctx context.Context, logger *logrus.Entry, device a
 
 	logger.WithField("payload", update).Debug("Sending update to Snipe-IT")
 
+	// Carry model metadata on the update so PatchAsset can include it in
+	// fieldset-error warnings without needing a separate lookup.
+	if update.Model.ID == 0 {
+		update.Model = existing.Model
+	}
+
 	if _, err := e.snipe.PatchAsset(ctx, existing.ID, *update); err != nil {
 		return err
 	}

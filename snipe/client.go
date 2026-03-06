@@ -154,7 +154,13 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 		// Parse field-level validation errors and retry without the rejected fields.
 		rejected := fieldsetErrors(string(resp.Message))
 		if len(rejected) > 0 && asset.CustomFields != nil {
-			log.WithField("asset_id", id).WithField("fields", rejected).Warn("Asset model is missing fieldset for custom fields — retrying update without them. Associate the axm2snipe fieldset with this model in Snipe-IT to fix this.")
+			log.WithFields(logrus.Fields{
+				"asset_id":    id,
+				"model_id":    asset.Model.ID,
+				"model_name":  asset.Model.Name,
+				"fieldset_id": asset.Model.FieldsetID,
+				"fields":      rejected,
+			}).Warn("Asset model is missing fieldset for custom fields — retrying update without them. Associate the axm2snipe fieldset with this model in Snipe-IT to fix this.")
 			// Copy CustomFields to avoid mutating the caller's map.
 			fieldsCopy := make(map[string]string, len(asset.CustomFields))
 			for k, v := range asset.CustomFields {
