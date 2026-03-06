@@ -198,17 +198,19 @@ func invalidFieldErrors(msg string) ([]string, string) {
 	}
 	var rejected []string
 	reason := ""
+fieldLoop:
 	for key, msgs := range errs {
 		for _, m := range msgs {
 			switch {
 			case strings.Contains(m, "not available on this Asset Model's fieldset"):
 				rejected = append(rejected, key)
 				reason = "fieldset missing"
+				continue fieldLoop
 			case strings.Contains(m, "is invalid."):
 				rejected = append(rejected, key)
 				reason = "invalid field value"
+				continue fieldLoop
 			}
-			break
 		}
 	}
 	return rejected, reason
