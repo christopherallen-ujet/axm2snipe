@@ -90,9 +90,12 @@ func Load(path string) (*Config, error) {
 }
 
 // Validate checks that all required fields are set for a full sync.
+// ABM credentials are not required when UseCache is true.
 func (c *Config) Validate() error {
-	if err := c.ValidateABM(); err != nil {
-		return err
+	if !c.Sync.UseCache {
+		if err := c.ValidateABM(); err != nil {
+			return err
+		}
 	}
 	if err := c.ValidateSnipeIT(); err != nil {
 		return err

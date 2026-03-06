@@ -58,16 +58,19 @@ func LoadConfig(cmd *cobra.Command) error {
 		abmclient.SetLogLevel(logrus.DebugLevel)
 		axmsync.SetLogLevel(logrus.DebugLevel)
 		notify.SetLogLevel(logrus.DebugLevel)
+		snipe.SetLogLevel(logrus.DebugLevel)
 	case verbose:
 		log.SetLevel(logrus.InfoLevel)
 		abmclient.SetLogLevel(logrus.InfoLevel)
 		axmsync.SetLogLevel(logrus.InfoLevel)
 		notify.SetLogLevel(logrus.InfoLevel)
+		snipe.SetLogLevel(logrus.InfoLevel)
 	default:
 		log.SetLevel(logrus.WarnLevel)
 		abmclient.SetLogLevel(logrus.WarnLevel)
 		axmsync.SetLogLevel(logrus.WarnLevel)
 		notify.SetLogLevel(logrus.WarnLevel)
+		snipe.SetLogLevel(logrus.WarnLevel)
 	}
 
 	return nil

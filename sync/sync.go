@@ -96,12 +96,22 @@ func (e *Engine) CacheDir() string {
 // Each section is saved immediately after fetching so that partial data
 // is preserved if a later stage fails or is interrupted.
 func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
+	devices, err := e.FetchAndSaveDevices(ctx)
+	if err != nil {
+		return err
+	}
+	return e.FetchAndSaveAppleCare(ctx, devices)
+}
+
+// FetchAndSaveDevices fetches devices from ABM, applies configured filters,
+// writes devices.json, and returns the device list for further use.
+func (e *Engine) FetchAndSaveDevices(ctx context.Context) ([]abmclient.Device, error) {
 	cacheDir := e.CacheDir()
 
 	log.Info("Fetching all devices from ABM...")
 	devices, _, err := e.abm.GetAllDevices(ctx)
 	if err != nil {
-		return fmt.Errorf("fetching ABM devices: %w", err)
+		return nil, fmt.Errorf("fetching ABM devices: %w", err)
 	}
 	log.Infof("Fetched %d devices from Apple Business Manager", len(devices))
 
@@ -122,11 +132,53 @@ func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
 		log.Warn("sync.mdm_only_cache is enabled but sync.mdm_only is false; cache filtering will be skipped")
 	}
 
-	// Save devices immediately
+	// Normalize to empty slice so callers can distinguish "no devices" from
+	// the nil sentinel used by FetchAndSaveAppleCare to mean "load from cache".
+	if devices == nil {
+		devices = []abmclient.Device{}
+	}
 	if err := writeJSON(cacheDir, "devices.json", devices); err != nil {
-		return fmt.Errorf("writing devices cache: %w", err)
+		return nil, fmt.Errorf("writing devices cache: %w", err)
 	}
 	log.Infof("Saved %d devices to %s/devices.json", len(devices), cacheDir)
+	return devices, nil
+}
+
+// loadDevicesFromCache reads only devices.json into e.cache.Devices without
+// touching applecare.json. Used by FetchAndSaveAppleCare so that an
+// AppleCare-only refresh does not warn about a missing applecare.json.
+func (e *Engine) loadDevicesFromCache() error {
+	cacheDir := e.CacheDir()
+	devicesPath := filepath.Join(cacheDir, "devices.json")
+	data, err := os.ReadFile(devicesPath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", devicesPath, err)
+	}
+	var devices []abmclient.Device
+	if err := json.Unmarshal(data, &devices); err != nil {
+		return fmt.Errorf("parsing %s: %w", devicesPath, err)
+	}
+	if e.cache == nil {
+		e.cache = &ABMCache{}
+	}
+	e.cache.Devices = devices
+	return nil
+}
+
+// FetchAndSaveAppleCare fetches AppleCare coverage for the given device list
+// and writes applecare.json. If devices is nil, it loads devices from cache.
+func (e *Engine) FetchAndSaveAppleCare(ctx context.Context, devices []abmclient.Device) error {
+	cacheDir := e.CacheDir()
+
+	if devices == nil {
+		// Load only devices.json to avoid spurious warnings about a missing
+		// applecare.json (the file we're about to create).
+		if err := e.loadDevicesFromCache(); err != nil {
+			return fmt.Errorf("loading device cache for AppleCare refresh: %w", err)
+		}
+		devices = e.cache.Devices
+		log.Infof("Loaded %d devices from cache for AppleCare refresh", len(devices))
+	}
 
 	log.Info("Fetching AppleCare coverage for all devices...")
 	appleCareMap := e.fetchAppleCareParallel(ctx, devices)
@@ -138,8 +190,7 @@ func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
 	if err := writeJSON(cacheDir, "applecare.json", appleCareMap); err != nil {
 		return fmt.Errorf("writing applecare cache: %w", err)
 	}
-
-	log.Infof("Saved %d devices and %d AppleCare records to %s/", len(devices), len(appleCareMap), cacheDir)
+	log.Infof("Saved %d AppleCare records to %s/applecare.json", len(appleCareMap), cacheDir)
 	return nil
 }
 
@@ -319,13 +370,6 @@ func (e *Engine) RunSingle(ctx context.Context, serial string) (*Stats, error) {
 		if device == nil {
 			return nil, fmt.Errorf("device %s not found in cache", serial)
 		}
-		// Resolve MDM server name for cached device
-		deviceToServer, err := e.abm.BuildDeviceServerMap(ctx)
-		if err != nil {
-			log.Warnf("Could not resolve MDM server names: %v", err)
-		} else if name, ok := deviceToServer[device.ID]; ok {
-			device.AssignedServer = name
-		}
 	} else {
 		var err error
 		device, err = e.abm.GetDevice(ctx, serial)
@@ -427,21 +471,6 @@ func (e *Engine) ensureSupplier(ctx context.Context, attrs *abm.OrgDeviceAttribu
 		return 0, nil
 	}
 
-	// Check supplier_mapping for direct ID match (purchaseSourceId -> Snipe-IT supplier ID)
-	// then purchaseSourceType match
-	if len(e.cfg.Sync.SupplierMapping) > 0 {
-		if attrs.PurchaseSourceID != "" {
-			if id, ok := e.cfg.Sync.SupplierMapping[attrs.PurchaseSourceID]; ok {
-				return id, nil
-			}
-		}
-		for mappedKey, supplierID := range e.cfg.Sync.SupplierMapping {
-			if strings.EqualFold(mappedKey, purchaseSource) {
-				return supplierID, nil
-			}
-		}
-	}
-
 	// Resolve a human-readable supplier name from purchaseSourceType
 	name := purchaseSource
 	if strings.EqualFold(name, "APPLE") {
@@ -451,6 +480,22 @@ func (e *Engine) ensureSupplier(ctx context.Context, attrs *abm.OrgDeviceAttribu
 	if name == "" || strings.EqualFold(name, "MANUALLY_ADDED") {
 		return 0, nil
 	}
+
+	// Check supplier_mapping for direct ID match (purchaseSourceId -> Snipe-IT supplier ID)
+	// then purchaseSourceType match
+	if attrs.PurchaseSourceID != "" {
+		if id, ok := e.cfg.Sync.SupplierMapping[attrs.PurchaseSourceID]; ok {
+			return id, nil
+		}
+	}
+	for mappedKey, supplierID := range e.cfg.Sync.SupplierMapping {
+		if strings.EqualFold(mappedKey, purchaseSource) {
+			return supplierID, nil
+		}
+	}
+	// Warn regardless of whether supplier_mapping is configured — this is a
+	// discovery hint so admins know what to add to their config.
+	log.WithField("purchase_source_id", attrs.PurchaseSourceID).WithField("purchase_source_type", purchaseSource).Warn("Purchase source not found in supplier_mapping — falling back to name-based lookup. Add this source to supplier_mapping in your config to suppress this warning.")
 
 	if id, ok := e.suppliers[strings.ToLower(name)]; ok {
 		return id, nil
@@ -487,21 +532,6 @@ func (e *Engine) fetchABMDevices(ctx context.Context) ([]abmclient.Device, error
 	if e.cache != nil {
 		allDevices = e.cache.Devices
 		log.Infof("Using %d cached devices", len(allDevices))
-
-		// Resolve MDM server names for cached devices (cache may not have them)
-		deviceToServer, err := e.abm.BuildDeviceServerMap(ctx)
-		if err != nil {
-			log.Warnf("Could not resolve MDM server names: %v", err)
-		} else if len(deviceToServer) > 0 {
-			resolved := 0
-			for i, d := range allDevices {
-				if name, ok := deviceToServer[d.ID]; ok {
-					allDevices[i].AssignedServer = name
-					resolved++
-				}
-			}
-			log.Infof("Resolved MDM server names for %d/%d cached devices", resolved, len(allDevices))
-		}
 	} else {
 		var err error
 		allDevices, _, err = e.abm.GetAllDevices(ctx)
@@ -789,6 +819,12 @@ func (e *Engine) updateAsset(ctx context.Context, logger *logrus.Entry, device a
 	}
 
 	logger.WithField("payload", update).Debug("Sending update to Snipe-IT")
+
+	// Carry model metadata on the update so PatchAsset can include it in
+	// fieldset-error warnings without needing a separate lookup.
+	if update.Model.ID == 0 {
+		update.Model = existing.Model
+	}
 
 	if _, err := e.snipe.PatchAsset(ctx, existing.ID, *update); err != nil {
 		return err

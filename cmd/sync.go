@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/CampusTech/axm2snipe/abmclient"
 	axmsync "github.com/CampusTech/axm2snipe/sync"
 )
 
@@ -26,14 +27,15 @@ func NewSyncCmd() *cobra.Command {
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
-	if err := Cfg.Validate(); err != nil {
-		return err
-	}
-
-	// Apply sync-specific flag overrides
+	// Apply sync-specific flag overrides before validation so that
+	// --use-cache skips the ABM credential check in Cfg.Validate().
 	applyBoolFlag(cmd, "force", &Cfg.Sync.Force)
 	applyBoolFlag(cmd, "update-only", &Cfg.Sync.UpdateOnly)
 	applyBoolFlag(cmd, "use-cache", &Cfg.Sync.UseCache)
+
+	if err := Cfg.Validate(); err != nil {
+		return err
+	}
 
 	if Cfg.Sync.DryRun {
 		log.Info("Running in DRY RUN mode - no changes will be made")
@@ -42,9 +44,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 	ctx, cancel := contextWithSignal()
 	defer cancel()
 
-	abmClient, err := newABMClient(ctx)
-	if err != nil {
-		return err
+	var abmClient *abmclient.Client
+	if !Cfg.Sync.UseCache {
+		var err error
+		abmClient, err = newABMClient(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	snipeClient, err := newSnipeClient()

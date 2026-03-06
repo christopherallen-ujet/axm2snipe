@@ -4,11 +4,20 @@ package snipe
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/sirupsen/logrus"
 	snipeit "github.com/CampusTech/go-snipeit"
 )
+
+var log = logrus.New()
+
+// SetLogLevel sets the logger level for the snipe package.
+func SetLogLevel(level logrus.Level) {
+	log.SetLevel(level)
+}
 
 // ErrDryRun is returned when a write operation is attempted in dry-run mode.
 var ErrDryRun = fmt.Errorf("write blocked: dry-run mode is enabled")
@@ -130,6 +139,9 @@ func (c *Client) CreateAsset(ctx context.Context, asset snipeit.Asset) (*snipeit
 }
 
 // PatchAsset partially updates an existing hardware asset by ID.
+// If Snipe-IT rejects custom fields because they are not in the asset model's
+// fieldset, those fields are stripped and the update is retried once so that
+// the non-custom-field data (name, serial, warranty, etc.) still gets applied.
 func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*snipeit.Asset, error) {
 	if c.DryRun {
 		return nil, ErrDryRun
@@ -139,9 +151,57 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 		return nil, fmt.Errorf("updating asset %d: %w", id, err)
 	}
 	if resp.Status != "success" {
+		// Parse field-level validation errors and retry without the rejected fields.
+		rejected := fieldsetErrors(string(resp.Message))
+		if len(rejected) > 0 && asset.CustomFields != nil {
+			log.WithFields(logrus.Fields{
+				"asset_id":    id,
+				"model_id":    asset.Model.ID,
+				"model_name":  asset.Model.Name,
+				"fieldset_id": asset.Model.FieldsetID,
+				"fields":      rejected,
+			}).Warn("Asset model is missing fieldset for custom fields — retrying update without them. Associate the axm2snipe fieldset with this model in Snipe-IT to fix this.")
+			// Copy CustomFields to avoid mutating the caller's map.
+			fieldsCopy := make(map[string]string, len(asset.CustomFields))
+			for k, v := range asset.CustomFields {
+				fieldsCopy[k] = v
+			}
+			for _, key := range rejected {
+				delete(fieldsCopy, key)
+			}
+			asset.CustomFields = fieldsCopy
+			resp, _, err = c.Assets.PatchContext(ctx, id, asset)
+			if err != nil {
+				return nil, fmt.Errorf("updating asset %d: %w", id, err)
+			}
+			if resp.Status != "success" {
+				return nil, fmt.Errorf("updating asset %d failed: %s", id, resp.Message)
+			}
+			return &resp.Payload, nil
+		}
 		return nil, fmt.Errorf("updating asset %d failed: %s", id, resp.Message)
 	}
 	return &resp.Payload, nil
+}
+
+// fieldsetErrors parses a Snipe-IT validation error message and returns the
+// custom field keys that were rejected because they are not in the model's fieldset.
+func fieldsetErrors(msg string) []string {
+	// Message is a JSON object: {"_snipeit_foo_1": ["This field seems to exist..."]}
+	var errs map[string][]string
+	if err := json.Unmarshal([]byte(msg), &errs); err != nil {
+		return nil
+	}
+	var rejected []string
+	for key, msgs := range errs {
+		for _, m := range msgs {
+			if strings.Contains(m, "not available on this Asset Model's fieldset") {
+				rejected = append(rejected, key)
+				break
+			}
+		}
+	}
+	return rejected
 }
 
 // --- Custom fields setup ---
