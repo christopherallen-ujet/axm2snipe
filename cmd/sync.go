@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/CampusTech/axm2snipe/abmclient"
 	axmsync "github.com/CampusTech/axm2snipe/sync"
 )
 
@@ -42,9 +43,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 	ctx, cancel := contextWithSignal()
 	defer cancel()
 
-	abmClient, err := newABMClient(ctx)
-	if err != nil {
-		return err
+	var abmClient *abmclient.Client
+	if !Cfg.Sync.UseCache {
+		var err error
+		abmClient, err = newABMClient(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	snipeClient, err := newSnipeClient()

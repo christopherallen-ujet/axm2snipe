@@ -319,13 +319,6 @@ func (e *Engine) RunSingle(ctx context.Context, serial string) (*Stats, error) {
 		if device == nil {
 			return nil, fmt.Errorf("device %s not found in cache", serial)
 		}
-		// Resolve MDM server name for cached device
-		deviceToServer, err := e.abm.BuildDeviceServerMap(ctx)
-		if err != nil {
-			log.Warnf("Could not resolve MDM server names: %v", err)
-		} else if name, ok := deviceToServer[device.ID]; ok {
-			device.AssignedServer = name
-		}
 	} else {
 		var err error
 		device, err = e.abm.GetDevice(ctx, serial)
@@ -487,21 +480,6 @@ func (e *Engine) fetchABMDevices(ctx context.Context) ([]abmclient.Device, error
 	if e.cache != nil {
 		allDevices = e.cache.Devices
 		log.Infof("Using %d cached devices", len(allDevices))
-
-		// Resolve MDM server names for cached devices (cache may not have them)
-		deviceToServer, err := e.abm.BuildDeviceServerMap(ctx)
-		if err != nil {
-			log.Warnf("Could not resolve MDM server names: %v", err)
-		} else if len(deviceToServer) > 0 {
-			resolved := 0
-			for i, d := range allDevices {
-				if name, ok := deviceToServer[d.ID]; ok {
-					allDevices[i].AssignedServer = name
-					resolved++
-				}
-			}
-			log.Infof("Resolved MDM server names for %d/%d cached devices", resolved, len(allDevices))
-		}
 	} else {
 		var err error
 		allDevices, _, err = e.abm.GetAllDevices(ctx)
