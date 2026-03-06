@@ -132,11 +132,37 @@ func (e *Engine) FetchAndSaveDevices(ctx context.Context) ([]abmclient.Device, e
 		log.Warn("sync.mdm_only_cache is enabled but sync.mdm_only is false; cache filtering will be skipped")
 	}
 
+	// Normalize to empty slice so callers can distinguish "no devices" from
+	// the nil sentinel used by FetchAndSaveAppleCare to mean "load from cache".
+	if devices == nil {
+		devices = []abmclient.Device{}
+	}
 	if err := writeJSON(cacheDir, "devices.json", devices); err != nil {
 		return nil, fmt.Errorf("writing devices cache: %w", err)
 	}
 	log.Infof("Saved %d devices to %s/devices.json", len(devices), cacheDir)
 	return devices, nil
+}
+
+// loadDevicesFromCache reads only devices.json into e.cache.Devices without
+// touching applecare.json. Used by FetchAndSaveAppleCare so that an
+// AppleCare-only refresh does not warn about a missing applecare.json.
+func (e *Engine) loadDevicesFromCache() error {
+	cacheDir := e.CacheDir()
+	devicesPath := filepath.Join(cacheDir, "devices.json")
+	data, err := os.ReadFile(devicesPath)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", devicesPath, err)
+	}
+	var devices []abmclient.Device
+	if err := json.Unmarshal(data, &devices); err != nil {
+		return fmt.Errorf("parsing %s: %w", devicesPath, err)
+	}
+	if e.cache == nil {
+		e.cache = &ABMCache{}
+	}
+	e.cache.Devices = devices
+	return nil
 }
 
 // FetchAndSaveAppleCare fetches AppleCare coverage for the given device list
@@ -145,8 +171,9 @@ func (e *Engine) FetchAndSaveAppleCare(ctx context.Context, devices []abmclient.
 	cacheDir := e.CacheDir()
 
 	if devices == nil {
-		// Load devices from existing cache when only refreshing AppleCare
-		if err := e.LoadCache(); err != nil {
+		// Load only devices.json to avoid spurious warnings about a missing
+		// applecare.json (the file we're about to create).
+		if err := e.loadDevicesFromCache(); err != nil {
 			return fmt.Errorf("loading device cache for AppleCare refresh: %w", err)
 		}
 		devices = e.cache.Devices
@@ -457,6 +484,7 @@ func (e *Engine) ensureSupplier(ctx context.Context, attrs *abm.OrgDeviceAttribu
 				return supplierID, nil
 			}
 		}
+		log.WithField("purchase_source_id", attrs.PurchaseSourceID).WithField("purchase_source_type", purchaseSource).Warn("Purchase source not found in supplier_mapping — falling back to name-based lookup. Add this source to supplier_mapping in your config to suppress this warning.")
 	}
 
 	// Resolve a human-readable supplier name from purchaseSourceType
