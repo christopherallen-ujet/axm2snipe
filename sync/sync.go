@@ -962,8 +962,8 @@ func (e *Engine) applyFieldMapping(asset *snipeit.Asset, device abmclient.Device
 }
 
 const (
-	warrantyNotesStart = "<!-- axm2snipe:warranty-start -->"
-	warrantyNotesEnd   = "<!-- axm2snipe:warranty-end -->"
+	warrantyNotesStart = "=== axm2snipe:warranty-start ==="
+	warrantyNotesEnd   = "=== axm2snipe:warranty-end ==="
 )
 
 // applyWarrantyNotes writes all AppleCare coverage records into a sentinel-delimited
