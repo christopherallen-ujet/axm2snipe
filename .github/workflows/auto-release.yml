@@ -49,6 +49,7 @@ jobs:
           PR_COUNT=$(gh pr list \
             --repo "${REPO}" \
             --state merged \
+            --base main \
             --search "merged:>=${SINCE}" \
             --json number \
             --limit 100 | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
@@ -60,12 +61,17 @@ jobs:
           fi
 
           # Ask Claude to determine bump type from PR contents
-          BUMP=$(python3 .github/scripts/determine_bump.py "$PREV_TAG")
+          if ! BUMP=$(python3 .github/scripts/determine_bump.py "$PREV_TAG"); then
+            echo "determine_bump.py failed, skipping release"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           # Validate bump type
           if [ "$BUMP" != "MAJOR" ] && [ "$BUMP" != "MINOR" ] && [ "$BUMP" != "PATCH" ]; then
-            echo "Unexpected bump type from Claude: ${BUMP}, defaulting to PATCH"
-            BUMP="PATCH"
+            echo "Unexpected bump type from Claude: ${BUMP}, skipping release"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           # Parse current version and compute next
