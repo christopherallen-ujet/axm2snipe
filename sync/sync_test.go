@@ -841,6 +841,34 @@ func TestApplyWarrantyNotes_PreservesManualNotes(t *testing.T) {
 	}
 }
 
+func TestApplyWarrantyNotes_NilCoverageRemovesBlock(t *testing.T) {
+	// Build notes that contain a sentinel block flanked by manual text.
+	existing := "Manual before.\n\n" + warrantyNotesStart + "\n[Active] AppleCare+ for Mac\n" + warrantyNotesEnd + "\n\nManual after."
+	asset := &snipeit.Asset{}
+	asset.Notes = existing
+
+	applyWarrantyNotes(asset, nil)
+
+	if strings.Contains(asset.Notes, warrantyNotesStart) {
+		t.Errorf("sentinel block should be removed when coverage is nil; notes = %q", asset.Notes)
+	}
+	if !strings.Contains(asset.Notes, "Manual before.") {
+		t.Errorf("manual prefix lost; notes = %q", asset.Notes)
+	}
+	if !strings.Contains(asset.Notes, "Manual after.") {
+		t.Errorf("manual suffix lost; notes = %q", asset.Notes)
+	}
+}
+
+func TestApplyWarrantyNotes_NilCoverageNoBlock(t *testing.T) {
+	asset := &snipeit.Asset{}
+	asset.Notes = "Just a manual note."
+	applyWarrantyNotes(asset, nil)
+	if asset.Notes != "Just a manual note." {
+		t.Errorf("notes should be unchanged; got %q", asset.Notes)
+	}
+}
+
 func TestFormatAssetDiff_IncludesNotes(t *testing.T) {
 	a := &snipeit.Asset{
 		CommonFields: snipeit.CommonFields{

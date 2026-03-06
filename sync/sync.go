@@ -974,8 +974,35 @@ const (
 
 // applyWarrantyNotes writes all AppleCare coverage records into a sentinel-delimited
 // block in asset.Notes, preserving any existing notes outside the block.
+// If coverage is nil or empty, any existing sentinel block is removed.
 func applyWarrantyNotes(asset *snipeit.Asset, coverage *abmclient.CoverageResult) {
+	existing := asset.Notes
+	startIdx := strings.Index(existing, warrantyNotesStart)
+
 	if coverage == nil || len(coverage.All) == 0 {
+		// Remove any stale sentinel block so old warranty data is not left behind.
+		if startIdx < 0 {
+			return
+		}
+		endIdx := strings.Index(existing[startIdx:], warrantyNotesEnd)
+		if endIdx < 0 {
+			// Malformed: no end marker — remove from start onward.
+			asset.Notes = strings.TrimSpace(existing[:startIdx])
+			return
+		}
+		endIdx += startIdx // make absolute
+		before := strings.TrimSpace(existing[:startIdx])
+		after := strings.TrimSpace(existing[endIdx+len(warrantyNotesEnd):])
+		switch {
+		case before != "" && after != "":
+			asset.Notes = before + "\n\n" + after
+		case before != "":
+			asset.Notes = before
+		case after != "":
+			asset.Notes = after
+		default:
+			asset.Notes = ""
+		}
 		return
 	}
 
@@ -997,22 +1024,24 @@ func applyWarrantyNotes(asset *snipeit.Asset, coverage *abmclient.CoverageResult
 	sb.WriteString(warrantyNotesEnd)
 	block := sb.String()
 
-	existing := asset.Notes
-	start := strings.Index(existing, warrantyNotesStart)
-	end := strings.Index(existing, warrantyNotesEnd)
-	if start >= 0 && end >= 0 {
-		// Replace existing block in place
-		asset.Notes = strings.TrimSpace(existing[:start]) + "\n\n" + block
-		if tail := strings.TrimSpace(existing[end+len(warrantyNotesEnd):]); tail != "" {
-			asset.Notes += "\n\n" + tail
+	if startIdx >= 0 {
+		endIdx := strings.Index(existing[startIdx:], warrantyNotesEnd)
+		if endIdx >= 0 {
+			endIdx += startIdx // make absolute
+			// Replace existing block in place
+			asset.Notes = strings.TrimSpace(existing[:startIdx]) + "\n\n" + block
+			if tail := strings.TrimSpace(existing[endIdx+len(warrantyNotesEnd):]); tail != "" {
+				asset.Notes += "\n\n" + tail
+			}
+			return
 		}
+	}
+
+	// No existing block — append.
+	if existing != "" {
+		asset.Notes = strings.TrimSpace(existing) + "\n\n" + block
 	} else {
-		// Append block
-		if existing != "" {
-			asset.Notes = strings.TrimSpace(existing) + "\n\n" + block
-		} else {
-			asset.Notes = block
-		}
+		asset.Notes = block
 	}
 }
 
