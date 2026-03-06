@@ -74,7 +74,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		{Name: "AXM: MDM Assigned?", Element: "text", Format: "BOOLEAN", HelpText: "Whether this device is assigned to an MDM server in ABM/ASM"},
 		{Name: "AXM: Added to Org", Element: "text", Format: "DATE", HelpText: "Date device was added to ABM/ASM organization"},
 		{Name: "AXM: AppleCare Description", Element: "text", Format: "ANY", HelpText: "AppleCare coverage description"},
-		{Name: "AXM: AppleCare Payment Type", Element: "radio", Format: "ANY", HelpText: "AppleCare payment type", FieldValues: "Paid Up Front\nFree\nIncluded\nNone"},
+		{Name: "AXM: AppleCare Payment Type", Element: "radio", Format: "ANY", HelpText: "AppleCare payment type", FieldValues: "Paid Up Front\nSubscription\nAbe Subscription\nNone"},
 		{Name: "AXM: AppleCare Renewable", Element: "listbox", Format: "BOOLEAN", HelpText: "Whether AppleCare coverage is renewable", FieldValues: "true\nfalse"},
 		{Name: "AXM: AppleCare Start Date", Element: "text", Format: "DATE", HelpText: "AppleCare coverage start date"},
 		{Name: "AXM: AppleCare Status", Element: "radio", Format: "ANY", HelpText: "AppleCare coverage status", FieldValues: "Active\nInactive\nExpired"},
