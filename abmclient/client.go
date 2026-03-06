@@ -122,33 +122,55 @@ func (c *Client) BuildDeviceServerMap(ctx context.Context) (map[string]string, e
 	return deviceToServer, nil
 }
 
-// GetAllDevices fetches all devices, resolves assigned MDM server names.
+// GetAllDevices fetches all devices and resolves assigned MDM server names.
+// The device list and MDM server map are fetched concurrently.
 func (c *Client) GetAllDevices(ctx context.Context) ([]Device, int, error) {
-	// Build device ID → server name map
-	deviceToServer, err := c.BuildDeviceServerMap(ctx)
-	if err != nil {
-		// Non-fatal: continue without server names, but warn since mdm_only filtering
-		// will treat all devices as unassigned if this fails.
-		log.WithError(err).Warn("Could not build device-server map; AssignedServer will be empty for all devices (mdm_only filtering may incorrectly skip managed devices)")
-		deviceToServer = make(map[string]string)
+	type serverMapResult struct {
+		m   map[string]string
+		err error
+	}
+	type devicesResult struct {
+		devices []abm.OrgDevice
+		total   int
+		err     error
 	}
 
-	// Fetch all devices
-	orgDevices, total, err := c.abm.FetchAllOrgDevices(ctx)
-	if err != nil {
-		return nil, 0, err
+	serverMapCh := make(chan serverMapResult, 1)
+	devicesCh := make(chan devicesResult, 1)
+
+	go func() {
+		m, err := c.BuildDeviceServerMap(ctx)
+		serverMapCh <- serverMapResult{m, err}
+	}()
+	go func() {
+		devices, total, err := c.abm.FetchAllOrgDevices(ctx)
+		devicesCh <- devicesResult{devices, total, err}
+	}()
+
+	smr := <-serverMapCh
+	dr := <-devicesCh
+
+	deviceToServer := smr.m
+	if smr.err != nil {
+		// Non-fatal: continue without server names, but warn since mdm_only filtering
+		// will treat all devices as unassigned if this fails.
+		log.WithError(smr.err).Warn("Could not build device-server map; AssignedServer will be empty for all devices (mdm_only filtering may incorrectly skip managed devices)")
+		deviceToServer = make(map[string]string)
+	}
+	if dr.err != nil {
+		return nil, 0, dr.err
 	}
 
 	// Wrap with resolved server names
-	devices := make([]Device, len(orgDevices))
-	for i, od := range orgDevices {
+	devices := make([]Device, len(dr.devices))
+	for i, od := range dr.devices {
 		devices[i] = Device{OrgDevice: od}
 		if name, ok := deviceToServer[od.ID]; ok {
 			devices[i].AssignedServer = name
 		}
 	}
 
-	return devices, total, nil
+	return devices, dr.total, nil
 }
 
 // GetDevice fetches a single device by serial number and resolves its assigned MDM server name.

@@ -127,28 +127,10 @@ func (e *Engine) FetchAndSaveCache(ctx context.Context) error {
 	log.Infof("Saved %d devices to %s/devices.json", len(devices), cacheDir)
 
 	log.Info("Fetching AppleCare coverage for all devices...")
-	appleCareMap := make(map[string]*abmclient.AppleCareCoverage)
-	for i, d := range devices {
-		if err := ctx.Err(); err != nil {
-			// Save partial AppleCare data before returning
-			if len(appleCareMap) > 0 {
-				if wErr := writeJSON(cacheDir, "applecare.json", appleCareMap); wErr != nil {
-					log.WithError(wErr).Warn("Could not save partial AppleCare cache")
-				} else {
-					log.Infof("Saved partial AppleCare cache (%d/%d devices) to %s/applecare.json", len(appleCareMap), len(devices), cacheDir)
-				}
-			}
-			return err
-		}
-		ac, err := e.abm.GetAppleCareCoverage(ctx, d.ID)
-		if err != nil {
-			log.WithError(err).WithField("device_id", d.ID).Debug("Could not fetch AppleCare coverage")
-		} else if ac != nil {
-			appleCareMap[d.ID] = ac
-		}
-		if (i+1)%50 == 0 {
-			log.Infof("AppleCare progress: %d/%d devices", i+1, len(devices))
-		}
+	appleCareMap := e.fetchAppleCareParallel(ctx, devices)
+
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
 	}
 
 	if err := writeJSON(cacheDir, "applecare.json", appleCareMap); err != nil {
@@ -188,6 +170,74 @@ func (e *Engine) LoadCache() error {
 		AppleCare: appleCareMap,
 	}
 	return nil
+}
+
+// appleCareWorkers is the number of concurrent AppleCare fetch goroutines.
+const appleCareWorkers = 10
+
+// fetchAppleCareParallel fetches AppleCare coverage for all devices concurrently
+// using a bounded worker pool. Returns a map of device ID → coverage.
+// Saves partial results to disk if the context is cancelled mid-way.
+func (e *Engine) fetchAppleCareParallel(ctx context.Context, devices []abmclient.Device) map[string]*abmclient.AppleCareCoverage {
+	type result struct {
+		deviceID string
+		coverage *abmclient.AppleCareCoverage
+		err      error
+	}
+
+	n := len(devices)
+	if n == 0 {
+		return make(map[string]*abmclient.AppleCareCoverage)
+	}
+
+	jobs := make(chan abmclient.Device, n)
+	results := make(chan result, n)
+
+	workers := appleCareWorkers
+	if workers > n {
+		workers = n
+	}
+	for range workers {
+		go func() {
+			for d := range jobs {
+				if ctx.Err() != nil {
+					results <- result{deviceID: d.ID}
+					continue
+				}
+				ac, err := e.abm.GetAppleCareCoverage(ctx, d.ID)
+				results <- result{deviceID: d.ID, coverage: ac, err: err}
+			}
+		}()
+	}
+
+	for _, d := range devices {
+		jobs <- d
+	}
+	close(jobs)
+
+	appleCareMap := make(map[string]*abmclient.AppleCareCoverage)
+	for i := range n {
+		r := <-results
+		if r.err != nil {
+			log.WithError(r.err).WithField("device_id", r.deviceID).Debug("Could not fetch AppleCare coverage")
+		} else if r.coverage != nil {
+			appleCareMap[r.deviceID] = r.coverage
+		}
+		if (i+1)%50 == 0 {
+			log.Infof("AppleCare progress: %d/%d devices", i+1, n)
+		}
+	}
+
+	if ctx.Err() != nil && len(appleCareMap) > 0 {
+		cacheDir := e.CacheDir()
+		if wErr := writeJSON(cacheDir, "applecare.json", appleCareMap); wErr != nil {
+			log.WithError(wErr).Warn("Could not save partial AppleCare cache")
+		} else {
+			log.Infof("Saved partial AppleCare cache (%d/%d devices) to %s/applecare.json", len(appleCareMap), n, cacheDir)
+		}
+	}
+
+	return appleCareMap
 }
 
 // writeJSON writes a value as indented JSON to a file in the given directory.
