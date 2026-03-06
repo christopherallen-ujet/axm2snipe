@@ -82,7 +82,7 @@ func TestGetAssetBySerial(t *testing.T) {
 		resp := map[string]any{
 			"total": 1,
 			"rows": []map[string]any{
-				{"id": 42, "name": "Test Asset"},
+				{"id": 42, "name": "Test Asset", "serial": "TESTSERIAL1"},
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
