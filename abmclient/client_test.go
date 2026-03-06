@@ -53,7 +53,7 @@ func TestAppleCareCoverage_Fields(t *testing.T) {
 		StartDateTime:   start,
 		EndDateTime:     end,
 		Status:          "ACTIVE",
-		PaymentType:     "Paid_up_front",
+		PaymentType:     "PAID_UP_FRONT",
 		IsRenewable:     true,
 		IsCanceled:      false,
 	}

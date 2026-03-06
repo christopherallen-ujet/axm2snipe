@@ -305,7 +305,7 @@ func TestApplyFieldMapping(t *testing.T) {
 		Status:        "ACTIVE",
 		StartDateTime: acStart,
 		EndDateTime:   acEnd,
-		PaymentType:   "Paid_up_front",
+		PaymentType:   "PAID_UP_FRONT",
 		IsRenewable:   true,
 	}
 	coverage := &abmclient.CoverageResult{
