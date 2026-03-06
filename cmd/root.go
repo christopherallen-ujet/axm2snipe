@@ -104,7 +104,7 @@ func contextWithSignal() (context.Context, context.CancelFunc) {
 // newABMClient creates and returns a new ABM client from global config.
 func newABMClient(ctx context.Context) (*abmclient.Client, error) {
 	log.Info("Connecting to Apple Business Manager...")
-	client, err := abmclient.NewClient(ctx, Cfg.ABM.ClientID, Cfg.ABM.KeyID, Cfg.ABM.PrivateKey)
+	client, err := abmclient.NewClient(ctx, Cfg.ABM.ClientID, Cfg.ABM.KeyID, Cfg.ABM.PrivateKeyValue())
 	if err != nil {
 		return nil, fmt.Errorf("creating ABM client: %w", err)
 	}

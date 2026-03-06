@@ -25,7 +25,7 @@ func runAccessToken(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	assertion, err := abm.NewAssertion(ctx, Cfg.ABM.ClientID, Cfg.ABM.KeyID, Cfg.ABM.PrivateKey)
+	assertion, err := abm.NewAssertion(ctx, Cfg.ABM.ClientID, Cfg.ABM.KeyID, Cfg.ABM.PrivateKeyValue())
 	if err != nil {
 		return fmt.Errorf("creating ABM assertion: %w", err)
 	}

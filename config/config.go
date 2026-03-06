@@ -100,6 +100,22 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// PrivateKeyValue returns the private key in a form suitable for abm.NewAssertion:
+//   - File path (value passes os.Stat): returned as-is; upstream reads the file.
+//   - Inline PEM (starts with "-----BEGIN"): returned as-is.
+//   - Bare base64 (anything else): wrapped in an EC PRIVATE KEY PEM block.
+func (c *ABMConfig) PrivateKeyValue() string {
+	key := strings.TrimSpace(c.PrivateKey)
+	if strings.HasPrefix(key, "-----BEGIN") {
+		return key
+	}
+	if _, err := os.Stat(c.PrivateKey); err == nil {
+		return c.PrivateKey // file path
+	}
+	// Bare base64 — wrap in a PEM block so the upstream parser can handle it.
+	return "-----BEGIN EC PRIVATE KEY-----\n" + key + "\n-----END EC PRIVATE KEY-----\n"
+}
+
 // ValidateABM checks that ABM credentials are set.
 func (c *Config) ValidateABM() error {
 	if c.ABM.ClientID == "" {
@@ -109,14 +125,7 @@ func (c *Config) ValidateABM() error {
 		return fmt.Errorf("abm.key_id is required")
 	}
 	if c.ABM.PrivateKey == "" {
-		return fmt.Errorf("abm.private_key is required (file path or inline PEM)")
-	}
-	// If the value doesn't look like PEM content, treat it as a file path and
-	// verify it exists so the user gets a clear error instead of a parse failure.
-	if !strings.HasPrefix(strings.TrimSpace(c.ABM.PrivateKey), "-----BEGIN") {
-		if _, err := os.Stat(c.ABM.PrivateKey); err != nil {
-			return fmt.Errorf("abm.private_key file not found: %s", c.ABM.PrivateKey)
-		}
+		return fmt.Errorf("abm.private_key is required (file path, inline PEM, or bare base64)")
 	}
 	return nil
 }
