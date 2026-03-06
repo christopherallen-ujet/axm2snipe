@@ -471,22 +471,6 @@ func (e *Engine) ensureSupplier(ctx context.Context, attrs *abm.OrgDeviceAttribu
 		return 0, nil
 	}
 
-	// Check supplier_mapping for direct ID match (purchaseSourceId -> Snipe-IT supplier ID)
-	// then purchaseSourceType match
-	if len(e.cfg.Sync.SupplierMapping) > 0 {
-		if attrs.PurchaseSourceID != "" {
-			if id, ok := e.cfg.Sync.SupplierMapping[attrs.PurchaseSourceID]; ok {
-				return id, nil
-			}
-		}
-		for mappedKey, supplierID := range e.cfg.Sync.SupplierMapping {
-			if strings.EqualFold(mappedKey, purchaseSource) {
-				return supplierID, nil
-			}
-		}
-		log.WithField("purchase_source_id", attrs.PurchaseSourceID).WithField("purchase_source_type", purchaseSource).Warn("Purchase source not found in supplier_mapping — falling back to name-based lookup. Add this source to supplier_mapping in your config to suppress this warning.")
-	}
-
 	// Resolve a human-readable supplier name from purchaseSourceType
 	name := purchaseSource
 	if strings.EqualFold(name, "APPLE") {
@@ -496,6 +480,22 @@ func (e *Engine) ensureSupplier(ctx context.Context, attrs *abm.OrgDeviceAttribu
 	if name == "" || strings.EqualFold(name, "MANUALLY_ADDED") {
 		return 0, nil
 	}
+
+	// Check supplier_mapping for direct ID match (purchaseSourceId -> Snipe-IT supplier ID)
+	// then purchaseSourceType match
+	if attrs.PurchaseSourceID != "" {
+		if id, ok := e.cfg.Sync.SupplierMapping[attrs.PurchaseSourceID]; ok {
+			return id, nil
+		}
+	}
+	for mappedKey, supplierID := range e.cfg.Sync.SupplierMapping {
+		if strings.EqualFold(mappedKey, purchaseSource) {
+			return supplierID, nil
+		}
+	}
+	// Warn regardless of whether supplier_mapping is configured — this is a
+	// discovery hint so admins know what to add to their config.
+	log.WithField("purchase_source_id", attrs.PurchaseSourceID).WithField("purchase_source_type", purchaseSource).Warn("Purchase source not found in supplier_mapping — falling back to name-based lookup. Add this source to supplier_mapping in your config to suppress this warning.")
 
 	if id, ok := e.suppliers[strings.ToLower(name)]; ok {
 		return id, nil
