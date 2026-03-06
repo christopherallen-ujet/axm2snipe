@@ -120,7 +120,7 @@ func TestSelectBestCoverage_ActiveBeatsInactive(t *testing.T) {
 }
 
 func TestSelectBestCoverage_TwoActive_PaidBeatsFree(t *testing.T) {
-	// Models GDKQ1VCX93: two ACTIVE warranties, one paid, one not
+	// Two ACTIVE warranties, one paid, one not — paid should win despite earlier end date
 	free := AppleCareCoverage{Status: "ACTIVE", PaymentType: "NONE", EndDateTime: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
 	paid := AppleCareCoverage{Status: "ACTIVE", PaymentType: "PAID_UP_FRONT", EndDateTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
 	best := selectBestCoverage([]AppleCareCoverage{free, paid})
