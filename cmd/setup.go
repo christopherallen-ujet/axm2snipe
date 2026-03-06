@@ -79,6 +79,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		{Name: "AXM: AppleCare Start Date", Element: "text", Format: "DATE", HelpText: "AppleCare coverage start date"},
 		{Name: "AXM: AppleCare Status", Element: "radio", Format: "ANY", HelpText: "AppleCare coverage status", FieldValues: "Active\nInactive\nExpired"},
 		mdmServerField,
+		{Name: "AXM: Part Number", Element: "text", Format: "ANY", HelpText: "Apple part number (e.g. MW0Y3LL/A)"},
 		{Name: "AXM: Released from Org", Element: "text", Format: "DATE", HelpText: "Date device was released from ABM/ASM organization"},
 	}
 
@@ -99,6 +100,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		"AXM: AppleCare Renewable":    "applecare_renewable",
 		"AXM: AppleCare Payment Type": "applecare_payment_type",
 		"AXM: Assigned MDM Server":    "assigned_server",
+		"AXM: Part Number":            "part_number",
 	}
 
 	// Build field mapping: DB column -> ABM attribute
@@ -126,6 +128,55 @@ func runSetup(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  %s: %s -> %s\n", name, dbCol, attr)
 		} else {
 			fmt.Printf("  %s: %s\n", name, dbCol)
+		}
+	}
+
+	// Fetch purchase sources from ABM and write supplier_mapping scaffold
+	log.Info("Fetching purchase sources from ABM (this fetches all devices)...")
+	purchaseSources, err := abmClient.GetAllPurchaseSources(ctx)
+	if err != nil {
+		log.Warnf("Could not fetch purchase sources: %v", err)
+	} else if len(purchaseSources) > 0 {
+		var entries []config.SupplierEntry
+		for _, ps := range purchaseSources {
+			if ps.Type == "MANUALLY_ADDED" {
+				continue // no supplier to map for manually added devices
+			}
+			if ps.ID != "" {
+				entries = append(entries, config.SupplierEntry{
+					Key:     ps.ID,
+					Comment: fmt.Sprintf("%s (id: %s)", ps.Type, ps.ID),
+				})
+			} else {
+				entries = append(entries, config.SupplierEntry{
+					Key:     ps.Type,
+					Comment: ps.Type,
+				})
+			}
+		}
+
+		if len(entries) > 0 {
+			if Cfg.Sync.DryRun {
+				fmt.Println("\nDRY RUN - no changes will be made. Add these to your settings.yaml supplier_mapping manually:")
+				for _, e := range entries {
+					fmt.Printf("    # %s\n", e.Comment)
+					fmt.Printf("    %s: 0  # TODO: set Snipe-IT supplier ID\n", e.Key)
+				}
+			} else if err := config.MergeSupplierMapping(ConfigFile, entries); err != nil {
+				log.Warnf("Could not save supplier mappings to %s: %v", ConfigFile, err)
+				fmt.Println("\nAdd these to your settings.yaml supplier_mapping manually:")
+				for _, e := range entries {
+					fmt.Printf("    # %s\n", e.Comment)
+					fmt.Printf("    %s: 0  # TODO: set Snipe-IT supplier ID\n", e.Key)
+				}
+			} else {
+				fmt.Printf("\nSupplier mapping scaffold saved to %s (set the Snipe-IT supplier IDs)\n", ConfigFile)
+			}
+
+			fmt.Println("\nPurchase sources found:")
+			for _, e := range entries {
+				fmt.Printf("  %s: %s\n", e.Key, e.Comment)
+			}
 		}
 	}
 
