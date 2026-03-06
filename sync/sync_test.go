@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -796,6 +797,67 @@ func TestFormatAssetDiff(t *testing.T) {
 	}
 	if m["_snipeit_color_1"] != "Silver" {
 		t.Errorf("_snipeit_color_1 = %v, want Silver", m["_snipeit_color_1"])
+	}
+}
+
+// --- applyWarrantyNotes tests ---
+
+func TestApplyWarrantyNotes_PreservesManualNotes(t *testing.T) {
+	ac := abmclient.AppleCareCoverage{
+		Status:          "ACTIVE",
+		Description:     "AppleCare+ for Mac",
+		AgreementNumber: "123456",
+		PaymentType:     "PAID_UP_FRONT",
+	}
+	coverage := &abmclient.CoverageResult{
+		Best: &ac,
+		All:  []abmclient.AppleCareCoverage{ac},
+	}
+
+	// First apply: no existing notes
+	asset := &snipeit.Asset{}
+	applyWarrantyNotes(asset, coverage)
+	if !strings.Contains(asset.Notes, warrantyNotesStart) {
+		t.Error("expected warranty sentinel start in notes")
+	}
+	if !strings.Contains(asset.Notes, "AppleCare+ for Mac") {
+		t.Error("expected coverage description in notes")
+	}
+
+	// Second apply: manual notes before and after existing sentinel block
+	asset.Notes = "Manual note before.\n\n" + asset.Notes + "\n\nManual note after."
+	applyWarrantyNotes(asset, coverage)
+
+	if !strings.HasPrefix(asset.Notes, "Manual note before.") {
+		t.Errorf("manual prefix lost; notes = %q", asset.Notes)
+	}
+	if !strings.Contains(asset.Notes, "Manual note after.") {
+		t.Errorf("manual suffix lost; notes = %q", asset.Notes)
+	}
+	// Sentinel block should appear exactly once
+	if strings.Count(asset.Notes, warrantyNotesStart) != 1 {
+		t.Errorf("expected exactly one sentinel start, got %d; notes = %q",
+			strings.Count(asset.Notes, warrantyNotesStart), asset.Notes)
+	}
+}
+
+func TestFormatAssetDiff_IncludesNotes(t *testing.T) {
+	a := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: make(map[string]string),
+		},
+	}
+	a.Notes = "some notes"
+	m := formatAssetDiff(a)
+	if m["notes"] != "some notes" {
+		t.Errorf("notes = %v, want %q", m["notes"], "some notes")
+	}
+
+	// Notes absent when empty
+	a2 := &snipeit.Asset{CommonFields: snipeit.CommonFields{CustomFields: make(map[string]string)}}
+	m2 := formatAssetDiff(a2)
+	if _, ok := m2["notes"]; ok {
+		t.Error("notes key should be absent when empty")
 	}
 }
 
