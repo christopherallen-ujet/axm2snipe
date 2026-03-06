@@ -155,9 +155,15 @@ func (c *Client) PatchAsset(ctx context.Context, id int, asset snipeit.Asset) (*
 		rejected := fieldsetErrors(string(resp.Message))
 		if len(rejected) > 0 && asset.CustomFields != nil {
 			log.WithField("asset_id", id).WithField("fields", rejected).Warn("Asset model is missing fieldset for custom fields — retrying update without them. Associate the axm2snipe fieldset with this model in Snipe-IT to fix this.")
-			for _, key := range rejected {
-				delete(asset.CustomFields, key)
+			// Copy CustomFields to avoid mutating the caller's map.
+			fieldsCopy := make(map[string]string, len(asset.CustomFields))
+			for k, v := range asset.CustomFields {
+				fieldsCopy[k] = v
 			}
+			for _, key := range rejected {
+				delete(fieldsCopy, key)
+			}
+			asset.CustomFields = fieldsCopy
 			resp, _, err = c.Assets.PatchContext(ctx, id, asset)
 			if err != nil {
 				return nil, fmt.Errorf("updating asset %d: %w", id, err)
