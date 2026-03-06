@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/zchee/abm"
+	"github.com/CampusTech/abm"
 )
 
 var log = logrus.New()

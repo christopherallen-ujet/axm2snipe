@@ -12,9 +12,9 @@ import (
 	"strings"
 
 	"github.com/schollz/progressbar/v3"
-	snipeit "github.com/michellepellon/go-snipeit"
+	snipeit "github.com/CampusTech/go-snipeit"
 	"github.com/sirupsen/logrus"
-	"github.com/zchee/abm"
+	"github.com/CampusTech/abm"
 
 	"github.com/CampusTech/axm2snipe/abmclient"
 	"github.com/CampusTech/axm2snipe/config"

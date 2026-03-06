@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/zchee/abm"
+	"github.com/CampusTech/abm"
 )
 
 func TestDevice_EmbeddedOrgDevice(t *testing.T) {

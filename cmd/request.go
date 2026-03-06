@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/spf13/cobra"
-	"github.com/zchee/abm"
+	"github.com/CampusTech/abm"
 	"golang.org/x/oauth2"
 )
 

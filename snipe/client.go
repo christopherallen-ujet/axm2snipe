@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	snipeit "github.com/michellepellon/go-snipeit"
+	snipeit "github.com/CampusTech/go-snipeit"
 )
 
 // ErrDryRun is returned when a write operation is attempted in dry-run mode.
