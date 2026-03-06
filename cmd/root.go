@@ -127,10 +127,11 @@ func Execute() {
 	log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
 
 	rootCmd := &cobra.Command{
-		Use:     "axm2snipe",
-		Short:   "Sync devices from Apple Business/School Manager into Snipe-IT",
-		Long:    "axm2snipe syncs devices from Apple Business Manager (ABM) / Apple School Manager (ASM) into Snipe-IT asset management.",
-		Version: Version,
+		Use:          "axm2snipe",
+		Short:        "Sync devices from Apple Business/School Manager into Snipe-IT",
+		Long:         "axm2snipe syncs devices from Apple Business Manager (ABM) / Apple School Manager (ASM) into Snipe-IT asset management.",
+		Version:      Version,
+		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return LoadConfig(cmd)
 		},
