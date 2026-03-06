@@ -750,6 +750,8 @@ func (e *Engine) createAsset(ctx context.Context, logger *logrus.Entry, device a
 
 	e.applyFieldMapping(&asset, device, coverage)
 	applyWarrantyNotes(&asset, coverage)
+	// Always use serial as asset tag regardless of field_mapping overrides.
+	asset.AssetTag = attrs.SerialNumber
 
 	if e.cfg.Sync.DryRun {
 		logger.WithField("payload", asset).Info("[DRY RUN] Would create asset")
@@ -992,7 +994,14 @@ func (e *Engine) applyFieldMapping(asset *snipeit.Asset, device abmclient.Device
 			}
 		}
 		if value != "" {
-			asset.CustomFields[snipeField] = value
+			// Route top-level Snipe-IT fields to their proper struct fields
+			// rather than CustomFields, so MarshalJSON does not overwrite them.
+			switch snipeField {
+			case "asset_tag":
+				asset.AssetTag = value
+			default:
+				asset.CustomFields[snipeField] = value
+			}
 		}
 	}
 
