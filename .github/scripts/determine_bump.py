@@ -3,9 +3,28 @@
 import sys
 import os
 import json
+import re
 import urllib.request
 import urllib.error
 import subprocess
+
+
+_SENSITIVE = re.compile(
+    r'(?:'
+    r'[A-Za-z0-9+/]{40,}={0,2}'          # base64-ish blobs (API keys, tokens)
+    r'|(?:sk|pk|rk|gh[ps]|xox[bpars]|ey[A-Za-z])[A-Za-z0-9_\-]{16,}'  # prefixed secrets
+    r'|[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}'              # email addresses
+    r'|(?:password|secret|token|apikey|api_key|auth)\s*[:=]\s*\S+'      # key=value pairs
+    r')'
+)
+
+
+def sanitize_body(body: str) -> str:
+    """Redact sensitive patterns then truncate to 1000 chars."""
+    if not body:
+        return ""
+    body = _SENSITIVE.sub("[REDACTED]", body)
+    return body[:1000]
 
 prev_tag = sys.argv[1]
 since = os.environ["SINCE"]
@@ -36,7 +55,7 @@ if not prs:
     sys.exit(0)
 
 pr_text = "\n\n".join(
-    "PR #" + str(pr["number"]) + ": " + pr["title"] + "\n" + (pr.get("body") or "").strip()[:2000]
+    "PR #" + str(pr["number"]) + ": " + pr["title"] + "\n" + sanitize_body((pr.get("body") or "").strip())
     for pr in prs
 )
 
