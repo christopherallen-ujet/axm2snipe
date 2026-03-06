@@ -45,6 +45,20 @@ Inspired by [jamf2snipe](https://github.com/grokability/jamf2snipe), but connect
 
 ## Installation
 
+**Download a pre-built binary** (recommended) from the [latest release](https://github.com/CampusTech/axm2snipe/releases/latest):
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/CampusTech/axm2snipe/releases/latest/download/axm2snipe-darwin-arm64 -o axm2snipe
+chmod +x axm2snipe
+
+# Linux (amd64)
+curl -L https://github.com/CampusTech/axm2snipe/releases/latest/download/axm2snipe-linux-amd64 -o axm2snipe
+chmod +x axm2snipe
+```
+
+Or install with Go:
+
 ```bash
 go install github.com/CampusTech/axm2snipe@latest
 ```

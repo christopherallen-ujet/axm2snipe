@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/zchee/abm"
+	"github.com/CampusTech/abm"
 )
 
 // NewAccessTokenCmd creates the access-token command.

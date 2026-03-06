@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/zchee/abm"
+	"github.com/CampusTech/abm"
 
 	"github.com/CampusTech/axm2snipe/abmclient"
 )
