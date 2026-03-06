@@ -93,4 +93,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NEXT_TAG: ${{ steps.version.outputs.next_tag }}
         run: |
-          gh workflow run release.yml --ref "${NEXT_TAG}"
+          gh workflow run release.yml --ref "${NEXT_TAG}" -f tag="${NEXT_TAG}"

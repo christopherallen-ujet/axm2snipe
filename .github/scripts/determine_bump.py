@@ -36,7 +36,7 @@ if not prs:
     sys.exit(0)
 
 pr_text = "\n\n".join(
-    "PR #" + str(pr["number"]) + ": " + pr["title"] + "\n" + (pr.get("body") or "").strip()
+    "PR #" + str(pr["number"]) + ": " + pr["title"] + "\n" + (pr.get("body") or "").strip()[:2000]
     for pr in prs
 )
 
