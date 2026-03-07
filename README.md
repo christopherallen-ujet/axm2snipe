@@ -285,7 +285,9 @@ Alternatively, create them manually:
 
 | Field | Element | Format | Values |
 | --- | --- | --- | --- |
-| MAC Address | text | MAC | -- |
+| Wi-Fi MAC Address | text | MAC | -- |
+| Bluetooth MAC Address | text | MAC | -- |
+| Ethernet MAC Address | text | ANY | -- (may be comma-separated if multiple) |
 | Color | text | ANY | -- |
 | Storage | text | ANY | -- |
 | Warranty End Date | text | DATE | -- |
