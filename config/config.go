@@ -55,7 +55,7 @@ type SyncConfig struct {
 	MDMOnly          bool              `yaml:"mdm_only"`          // only sync devices assigned to an MDM server
 	MDMOnlyCache     bool              `yaml:"mdm_only_cache"`    // also exclude non-MDM devices from cache (requires mdm_only)
 	SupplierMapping  map[string]int    `yaml:"supplier_mapping"`  // ABM purchaseSourceId or purchaseSourceType -> snipe supplier ID
-	DisableModelImages bool             `yaml:"disable_model_images"` // set true to skip fetching images from appledb.dev for new models
+	ModelImages        bool              `yaml:"model_images"`         // fetch device images from appledb.dev for newly created models
 }
 
 // Load reads configuration from a YAML file and applies environment variable overrides.

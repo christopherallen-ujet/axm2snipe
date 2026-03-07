@@ -703,7 +703,7 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 		FieldsetID: e.cfg.SnipeIT.CustomFieldsetID,
 	}
 
-	if !e.cfg.Sync.DisableModelImages && attrs.ProductType != "" {
+	if e.cfg.Sync.ModelImages && attrs.ProductType != "" {
 		if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
 			model.Image = img
 		}
