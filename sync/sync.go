@@ -1081,20 +1081,34 @@ func applyWarrantyNotes(asset *snipeit.Asset, coverage *abmclient.CoverageResult
 		return
 	}
 
+	// Build rows: [Status, Coverage, Start, End, Agreement, Payment]
+	headers := []string{"Status", "Coverage", "Start", "End", "Agreement", "Payment"}
+	rows := make([][]string, len(coverage.All))
+	for i, c := range coverage.All {
+		agreement := c.AgreementNumber
+		if agreement == "" {
+			agreement = "N/A"
+		}
+		payment := titleCase(c.PaymentType)
+		if payment == "" || strings.ToUpper(c.PaymentType) == "NONE" {
+			payment = "None"
+		}
+		rows[i] = []string{
+			titleCase(c.Status),
+			c.Description,
+			c.StartDateTime.Format("2006-01-02"),
+			c.EndDateTime.Format("2006-01-02"),
+			agreement,
+			payment,
+		}
+	}
+
+	// Render pipe-separated table with header row
 	var sb strings.Builder
 	sb.WriteString(warrantyNotesStart + "\n")
-	for _, c := range coverage.All {
-		status := titleCase(c.Status)
-		start := c.StartDateTime.Format("2006-01-02")
-		end := c.EndDateTime.Format("2006-01-02")
-		line := fmt.Sprintf("[%s] %-20s %s to %s", status, c.Description, start, end)
-		if c.AgreementNumber != "" {
-			line += " | " + c.AgreementNumber
-		}
-		if c.PaymentType != "" && c.PaymentType != "NONE" {
-			line += " | " + titleCase(c.PaymentType)
-		}
-		sb.WriteString(line + "\n")
+	sb.WriteString(strings.Join(headers, " | ") + "\n")
+	for _, row := range rows {
+		sb.WriteString(strings.Join(row, " | ") + "\n")
 	}
 	sb.WriteString(warrantyNotesEnd)
 	block := sb.String()
