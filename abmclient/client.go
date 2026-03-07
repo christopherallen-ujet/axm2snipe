@@ -6,6 +6,7 @@ package abmclient
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,6 +18,16 @@ var log = logrus.New()
 // SetLogLevel sets the logger level for the abmclient package.
 func SetLogLevel(level logrus.Level) {
 	log.SetLevel(level)
+}
+
+// SetLogFormatter sets the logger formatter for the abmclient package.
+func SetLogFormatter(formatter logrus.Formatter) {
+	log.SetFormatter(formatter)
+}
+
+// SetLogOutput sets the logger output for the abmclient package.
+func SetLogOutput(output io.Writer) {
+	log.SetOutput(output)
 }
 
 // Client wraps an abm.Client with axm2snipe-specific helpers.

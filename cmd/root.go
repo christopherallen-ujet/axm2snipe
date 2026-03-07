@@ -78,7 +78,7 @@ func LoadConfig(cmd *cobra.Command) error {
 	default:
 		return fmt.Errorf("invalid --log-format %q: must be 'text' or 'json'", logFormat)
 	}
-	log.SetFormatter(formatter)
+	setAllLogFormatters(formatter)
 
 	// Configure log output: optionally tee to a file
 	if logFile != "" {
@@ -87,7 +87,8 @@ func LoadConfig(cmd *cobra.Command) error {
 			return fmt.Errorf("opening log file: %w", err)
 		}
 		logFileFD = f
-		log.SetOutput(io.MultiWriter(os.Stderr, f))
+		output := io.MultiWriter(os.Stderr, f)
+		setAllLogOutputs(output)
 	}
 
 	return nil
@@ -99,6 +100,22 @@ func setAllLogLevels(level logrus.Level) {
 	axmsync.SetLogLevel(level)
 	notify.SetLogLevel(level)
 	snipe.SetLogLevel(level)
+}
+
+func setAllLogFormatters(formatter logrus.Formatter) {
+	log.SetFormatter(formatter)
+	abmclient.SetLogFormatter(formatter)
+	axmsync.SetLogFormatter(formatter)
+	notify.SetLogFormatter(formatter)
+	snipe.SetLogFormatter(formatter)
+}
+
+func setAllLogOutputs(output io.Writer) {
+	log.SetOutput(output)
+	abmclient.SetLogOutput(output)
+	axmsync.SetLogOutput(output)
+	notify.SetLogOutput(output)
+	snipe.SetLogOutput(output)
 }
 
 func applyBoolFlag(cmd *cobra.Command, name string, dst *bool) {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -21,6 +22,16 @@ var log = logrus.New()
 // SetLogLevel sets the logger level for the notify package.
 func SetLogLevel(level logrus.Level) {
 	log.SetLevel(level)
+}
+
+// SetLogFormatter sets the logger formatter for the notify package.
+func SetLogFormatter(formatter logrus.Formatter) {
+	log.SetFormatter(formatter)
+}
+
+// SetLogOutput sets the logger output for the notify package.
+func SetLogOutput(output io.Writer) {
+	log.SetOutput(output)
 }
 
 // Notifier sends Slack webhook notifications.
