@@ -65,10 +65,10 @@ sync:
   # Set asset name to "Model (Color)"
   # set_name: false
 
-  # Fetch device images from appledb.dev and attach them to newly created models.
-  # Images are sourced by hardware identifier (e.g. "Mac16,10"). No-op if the
-  # image cannot be fetched; does not update images on existing models.
-  # model_images: false
+  # Disable automatic fetching of device images from appledb.dev for new models.
+  # Images are sourced by hardware identifier (e.g. "Mac16,10") and attached to
+  # newly created models. Does not update images on existing models.
+  # disable_model_images: false
 
   # Map ABM supplier to Snipe-IT supplier ID.
   # Keys can be purchaseSourceId (e.g. "1C71B60") or purchaseSourceType (e.g. "APPLE", "MANUALLY_ADDED").

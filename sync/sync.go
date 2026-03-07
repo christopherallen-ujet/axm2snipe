@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -702,8 +703,8 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 		FieldsetID: e.cfg.SnipeIT.CustomFieldsetID,
 	}
 
-	if e.cfg.Sync.ModelImages && modelNumber != "" {
-		if img := fetchModelImage(modelNumber); img != "" {
+	if !e.cfg.Sync.DisableModelImages && attrs.ProductType != "" {
+		if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
 			model.Image = img
 		}
 	}
@@ -1164,7 +1165,7 @@ func deviceSerial(d abmclient.Device) string {
 // fetchModelImage fetches a device image from appledb.dev for the given
 // hardware identifier (e.g. "Mac16,10") and returns it as a base64 data URI
 // suitable for Snipe-IT's image field. Returns "" on any error.
-func fetchModelImage(productType string) string {
+func fetchModelImage(ctx context.Context, productType string) string {
 	type appleDBDevice struct {
 		ImageKey string `json:"imageKey"`
 		Colors   []struct {
@@ -1172,8 +1173,14 @@ func fetchModelImage(productType string) string {
 		} `json:"colors"`
 	}
 
+	client := &http.Client{Timeout: 10 * time.Second}
+
 	infoURL := fmt.Sprintf("https://api.appledb.dev/device/%s.json", productType)
-	infoResp, err := http.Get(infoURL) //nolint:noctx
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, infoURL, nil)
+	if err != nil {
+		return ""
+	}
+	infoResp, err := client.Do(req)
 	if err != nil {
 		log.WithField("product_type", productType).WithError(err).Debug("AppleDB device lookup failed")
 		return ""
@@ -1191,7 +1198,11 @@ func fetchModelImage(productType string) string {
 	}
 
 	imgURL := fmt.Sprintf("https://img.appledb.dev/device@main/%s/%s.png", dev.ImageKey, dev.Colors[0].Key)
-	imgResp, err := http.Get(imgURL) //nolint:noctx
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, imgURL, nil)
+	if err != nil {
+		return ""
+	}
+	imgResp, err := client.Do(req)
 	if err != nil {
 		log.WithField("image_url", imgURL).WithError(err).Debug("AppleDB image fetch failed")
 		return ""
