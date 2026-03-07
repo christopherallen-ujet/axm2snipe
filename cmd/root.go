@@ -80,15 +80,19 @@ func LoadConfig(cmd *cobra.Command) error {
 	}
 	setAllLogFormatters(formatter)
 
-	// Configure log output: optionally tee to a file
+	// Reset outputs for each invocation, then optionally tee to a file.
+	setAllLogOutputs(os.Stderr)
+	if logFileFD != nil {
+		_ = logFileFD.Close()
+		logFileFD = nil
+	}
 	if logFile != "" {
 		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 		if err != nil {
 			return fmt.Errorf("opening log file: %w", err)
 		}
 		logFileFD = f
-		output := io.MultiWriter(os.Stderr, f)
-		setAllLogOutputs(output)
+		setAllLogOutputs(io.MultiWriter(os.Stderr, f))
 	}
 
 	return nil
