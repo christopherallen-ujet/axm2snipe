@@ -1213,18 +1213,28 @@ func fetchModelImage(ctx context.Context, productType string) string {
 		return ""
 	}
 
-	imgBytes, err := io.ReadAll(imgResp.Body)
+	// Validate content type and cap body size (2 MiB) before buffering.
+	const maxModelImageBytes = 2 << 20
+	if ct := imgResp.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
+		log.WithFields(logrus.Fields{"image_url": imgURL, "content_type": ct}).Debug("AppleDB returned unexpected content type")
+		return ""
+	}
+	imgBytes, err := io.ReadAll(io.LimitReader(imgResp.Body, maxModelImageBytes+1))
 	if err != nil {
 		log.WithField("image_url", imgURL).WithError(err).Debug("Reading AppleDB image failed")
 		return ""
 	}
-
-	contentType := imgResp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/png"
+	if len(imgBytes) > maxModelImageBytes {
+		log.WithField("image_url", imgURL).Debug("AppleDB image too large, skipping")
+		return ""
+	}
+	// Verify PNG magic bytes.
+	if len(imgBytes) < 8 || string(imgBytes[:8]) != "\x89PNG\r\n\x1a\n" {
+		log.WithField("image_url", imgURL).Debug("AppleDB image is not a valid PNG, skipping")
+		return ""
 	}
 	log.WithField("image_url", imgURL).Debug("Fetched model image from AppleDB")
-	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(imgBytes)
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(imgBytes)
 }
 
 // formatAssetDiff returns a human-readable summary of an asset diff for logging.
