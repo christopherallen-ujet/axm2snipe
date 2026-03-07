@@ -253,6 +253,54 @@ func TestDiffAsset_CustomFieldDiff(t *testing.T) {
 	}
 }
 
+func TestDiffAsset_CustomFieldHTMLEncoding(t *testing.T) {
+	// Snipe-IT HTML-encodes custom field values. A description like
+	// "AppleCare+ Theft & Loss" comes back as "AppleCare+ Theft &amp; Loss".
+	// diffAsset must unescape before comparing.
+	e := &Engine{cfg: &config.Config{}}
+	desired := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_axm_applecare_description_26": "AppleCare+ Theft & Loss",
+			},
+		},
+	}
+	existing := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_axm_applecare_description_26": "AppleCare+ Theft &amp; Loss",
+			},
+		},
+	}
+	if diff := e.diffAsset(desired, existing); diff != nil {
+		t.Errorf("diffAsset should return nil when custom field values differ only by HTML encoding, got %+v", diff)
+	}
+}
+
+func TestDiffAsset_NotesHTMLEncoding(t *testing.T) {
+	// Snipe-IT HTML-encodes special characters (e.g. "&" → "&amp;") when storing
+	// notes. diffAsset must unescape before comparing so descriptions like
+	// "AppleCare+ Theft & Loss" don't trigger a spurious update every sync.
+	e := &Engine{cfg: &config.Config{}}
+	notes := "=== axm2snipe:warranty-start ===\n[Inactive] AppleCare+ Theft & Loss 2025-09-27 to 2025-09-28\n=== axm2snipe:warranty-end ==="
+	desired := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			Notes:        notes,
+			CustomFields: map[string]string{},
+		},
+	}
+	existing := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			// Snipe-IT returns HTML-encoded version
+			Notes:        "=== axm2snipe:warranty-start ===\n[Inactive] AppleCare+ Theft &amp; Loss 2025-09-27 to 2025-09-28\n=== axm2snipe:warranty-end ===",
+			CustomFields: map[string]string{},
+		},
+	}
+	if diff := e.diffAsset(desired, existing); diff != nil {
+		t.Errorf("diffAsset should return nil when notes differ only by HTML encoding, got diff with notes=%q", diff.Notes)
+	}
+}
+
 func TestDiffAsset_SupplierDiff(t *testing.T) {
 	e := &Engine{cfg: &config.Config{}}
 	desired := &snipeit.Asset{

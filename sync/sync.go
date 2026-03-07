@@ -7,13 +7,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
-	"time"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/schollz/progressbar/v3"
 	snipeit "github.com/CampusTech/go-snipeit"
@@ -874,17 +875,18 @@ func (e *Engine) diffAsset(desired *snipeit.Asset, existing *snipeit.Asset) *sni
 	// Compare full notes string; desired.Notes already contains the existing
 	// content with only the sentinel block replaced, so a difference here means
 	// the warranty block changed.
-	if desired.Notes != "" && desired.Notes != existing.Notes {
+	// Snipe-IT HTML-encodes special characters (e.g. "&" → "&amp;") when storing
+	// notes, so unescape the existing value before comparing.
+	if desired.Notes != "" && desired.Notes != html.UnescapeString(existing.Notes) {
 		diff.Notes = desired.Notes
 		hasChanges = true
 	}
 
-	// Compare custom fields
+	// Compare custom fields. Snipe-IT HTML-encodes field values via e()
+	// (htmlspecialchars) in its API transformer, and BOOLEAN fields are stored
+	// as "0"/"1" while we write "false"/"true". Normalize both before comparing.
 	for key, desiredVal := range desired.CustomFields {
-		currentVal := existing.CustomFields[key]
-		// Normalize boolean representations: Snipe-IT returns "0"/"1" for BOOLEAN
-		// format fields, but we write "false"/"true". Treat them as equivalent so
-		// we don't send a no-op update every sync cycle.
+		currentVal := html.UnescapeString(existing.CustomFields[key])
 		if normalizeBoolStr(currentVal) != normalizeBoolStr(desiredVal) {
 			diff.CustomFields[key] = desiredVal
 			hasChanges = true
