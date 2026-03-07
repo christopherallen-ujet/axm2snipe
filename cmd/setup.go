@@ -79,8 +79,11 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		{Name: "AXM: AppleCare Start Date", Element: "text", Format: "DATE", HelpText: "AppleCare coverage start date"},
 		{Name: "AXM: AppleCare Status", Element: "radio", Format: "ANY", HelpText: "AppleCare coverage status", FieldValues: "Active\nInactive\nExpired"},
 		mdmServerField,
+		{Name: "AXM: Bluetooth MAC Address", Element: "text", Format: "MAC", HelpText: "Bluetooth MAC address (colon-separated)"},
+		{Name: "AXM: Ethernet MAC Address", Element: "text", Format: "ANY", HelpText: "Ethernet MAC address(es) (colon-separated, comma-separated if multiple)"},
 		{Name: "AXM: Part Number", Element: "text", Format: "ANY", HelpText: "Apple part number (e.g. MW0Y3LL/A)"},
 		{Name: "AXM: Released from Org", Element: "text", Format: "DATE", HelpText: "Date device was released from ABM/ASM organization"},
+		{Name: "AXM: Wi-Fi MAC Address", Element: "text", Format: "MAC", HelpText: "Wi-Fi MAC address (colon-separated)"},
 	}
 
 	log.Info("Creating custom fields in Snipe-IT...")
@@ -100,7 +103,10 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		"AXM: AppleCare Renewable":    "applecare_renewable",
 		"AXM: AppleCare Payment Type": "applecare_payment_type",
 		"AXM: Assigned MDM Server":    "assigned_server",
+		"AXM: Bluetooth MAC Address":  "bluetooth_mac",
+		"AXM: Ethernet MAC Address":   "ethernet_mac",
 		"AXM: Part Number":            "part_number",
+		"AXM: Wi-Fi MAC Address":      "wifi_mac",
 	}
 
 	// Build field mapping: DB column -> ABM attribute

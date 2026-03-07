@@ -96,7 +96,9 @@ sync:
   # warranty_months is auto-calculated from purchase_date to applecare_end.
   #
   # Recommended Snipe-IT custom field types:
-  #   MAC Address          -> text, format: MAC
+  #   Wi-Fi MAC Address    -> text, format: MAC
+  #   Bluetooth MAC Addr   -> text, format: MAC
+  #   Ethernet MAC Addr    -> text, format: ANY  (may be multiple, comma-separated)
   #   Color                -> text, format: ANY
   #   Storage              -> text, format: ANY
   #   Warranty End Date    -> text, format: DATE
@@ -107,7 +109,9 @@ sync:
   #   Assigned MDM Server  -> text, format: ANY
   #
   # field_mapping:
-  #   _snipeit_mac_address_1: wifi_mac
+  #   _snipeit_wifi_mac_1: wifi_mac
+  #   _snipeit_bluetooth_mac_2: bluetooth_mac
+  #   _snipeit_ethernet_mac_3: ethernet_mac
   #   _snipeit_storage_3: device_capacity
   #   _snipeit_color_7: color
   #   purchase_date: order_date
