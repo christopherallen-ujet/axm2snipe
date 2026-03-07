@@ -17,7 +17,7 @@ func newTestClient(t *testing.T, handler http.Handler) *Client {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	c, err := NewClient(srv.URL, "test-api-key")
+	c, err := NewClient(srv.URL, "test-api-key", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestNewClient_TrimTrailingSlash(t *testing.T) {
 	srv := httptest.NewServer(http.NotFoundHandler())
 	defer srv.Close()
 
-	c, err := NewClient(srv.URL+"/", "test-key")
+	c, err := NewClient(srv.URL+"/", "test-key", false)
 	if err != nil {
 		t.Fatal(err)
 	}
