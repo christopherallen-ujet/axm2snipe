@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/CampusTech/abm v0.0.0-campustech
-	github.com/CampusTech/go-snipeit v0.0.0-campustech
+	github.com/CampusTech/go-snipeit v0.0.0-campustech.0.20260307000307-3c91c761f05b
 	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2

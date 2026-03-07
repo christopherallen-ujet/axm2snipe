@@ -2,6 +2,8 @@ github.com/CampusTech/abm v0.0.0-campustech h1:l+BWbYtD5UiVIODWOz0Wu888FRVckP/HR
 github.com/CampusTech/abm v0.0.0-campustech/go.mod h1:zYggH/Wlgoi9AwkLR6ahhhBIFJvEcsd9XPa4cTz8yBM=
 github.com/CampusTech/go-snipeit v0.0.0-campustech h1:iDtHFYFPiKoS68HbsqA7ouVevoF2apWQ0sjxY3ufcg0=
 github.com/CampusTech/go-snipeit v0.0.0-campustech/go.mod h1:dzmCr1wp/ZqbcdyYO/R+eWB68ZLIbGH1D01ZV6wfiTs=
+github.com/CampusTech/go-snipeit v0.0.0-campustech.0.20260307000307-3c91c761f05b h1:Mz8SR6+mdhG1cR76NQa7PbAGULLkQTzie/RV7jtVSrQ=
+github.com/CampusTech/go-snipeit v0.0.0-campustech.0.20260307000307-3c91c761f05b/go.mod h1:dzmCr1wp/ZqbcdyYO/R+eWB68ZLIbGH1D01ZV6wfiTs=
 github.com/chengxilo/virtualterm v1.0.4 h1:Z6IpERbRVlfB8WkOmtbHiDbBANU7cimRIof7mk9/PwM=
 github.com/chengxilo/virtualterm v1.0.4/go.mod h1:DyxxBZz/x1iqJjFxTFcr6/x+jSpqN0iwWCOK1q10rlY=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=

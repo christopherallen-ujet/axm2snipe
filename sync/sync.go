@@ -4,8 +4,11 @@ package sync
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -687,7 +690,7 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 		return 0, nil
 	}
 
-	newModel, err := e.snipe.CreateModel(ctx, snipeit.Model{
+	model := snipeit.Model{
 		CommonFields: snipeit.CommonFields{Name: modelName},
 		ModelNumber:  modelNumber,
 		Category: snipeit.Category{
@@ -697,7 +700,15 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 			CommonFields: snipeit.CommonFields{ID: e.cfg.SnipeIT.ManufacturerID},
 		},
 		FieldsetID: e.cfg.SnipeIT.CustomFieldsetID,
-	})
+	}
+
+	if e.cfg.Sync.ModelImages && modelNumber != "" {
+		if img := fetchModelImage(modelNumber); img != "" {
+			model.Image = img
+		}
+	}
+
+	newModel, err := e.snipe.CreateModel(ctx, model)
 	if err != nil {
 		return 0, err
 	}
@@ -1148,6 +1159,61 @@ func deviceSerial(d abmclient.Device) string {
 		return d.Attributes.SerialNumber
 	}
 	return d.ID
+}
+
+// fetchModelImage fetches a device image from appledb.dev for the given
+// hardware identifier (e.g. "Mac16,10") and returns it as a base64 data URI
+// suitable for Snipe-IT's image field. Returns "" on any error.
+func fetchModelImage(productType string) string {
+	type appleDBDevice struct {
+		ImageKey string `json:"imageKey"`
+		Colors   []struct {
+			Key string `json:"key"`
+		} `json:"colors"`
+	}
+
+	infoURL := fmt.Sprintf("https://api.appledb.dev/device/%s.json", productType)
+	infoResp, err := http.Get(infoURL) //nolint:noctx
+	if err != nil {
+		log.WithField("product_type", productType).WithError(err).Debug("AppleDB device lookup failed")
+		return ""
+	}
+	defer infoResp.Body.Close()
+	if infoResp.StatusCode != http.StatusOK {
+		log.WithFields(logrus.Fields{"product_type": productType, "status": infoResp.StatusCode}).Debug("AppleDB returned non-200")
+		return ""
+	}
+
+	var dev appleDBDevice
+	if err := json.NewDecoder(infoResp.Body).Decode(&dev); err != nil || dev.ImageKey == "" || len(dev.Colors) == 0 {
+		log.WithField("product_type", productType).Debug("AppleDB response missing imageKey or colors")
+		return ""
+	}
+
+	imgURL := fmt.Sprintf("https://img.appledb.dev/device@main/%s/%s.png", dev.ImageKey, dev.Colors[0].Key)
+	imgResp, err := http.Get(imgURL) //nolint:noctx
+	if err != nil {
+		log.WithField("image_url", imgURL).WithError(err).Debug("AppleDB image fetch failed")
+		return ""
+	}
+	defer imgResp.Body.Close()
+	if imgResp.StatusCode != http.StatusOK {
+		log.WithFields(logrus.Fields{"image_url": imgURL, "status": imgResp.StatusCode}).Debug("AppleDB image returned non-200")
+		return ""
+	}
+
+	imgBytes, err := io.ReadAll(imgResp.Body)
+	if err != nil {
+		log.WithField("image_url", imgURL).WithError(err).Debug("Reading AppleDB image failed")
+		return ""
+	}
+
+	contentType := imgResp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/png"
+	}
+	log.WithField("image_url", imgURL).Debug("Fetched model image from AppleDB")
+	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(imgBytes)
 }
 
 // formatAssetDiff returns a human-readable summary of an asset diff for logging.
