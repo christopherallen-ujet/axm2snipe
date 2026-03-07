@@ -116,8 +116,8 @@ sync:
   #   _snipeit_color_5: color
   #   purchase_date: order_date
   #   order_number: order_number
-  #   _snipeit_warranty_end_date_4: applecare_end
-  #   _snipeit_warranty_id_5: applecare_agreement
+  #   _snipeit_warranty_end_date_6: applecare_end
+  #   _snipeit_warranty_id_7: applecare_agreement
   #   _snipeit_applecare_status_9: applecare_status
   #   _snipeit_applecare_description_10: applecare_description
   #   _snipeit_applecare_start_date_11: applecare_start
