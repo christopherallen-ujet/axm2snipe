@@ -111,6 +111,15 @@ axm2snipe setup -v
 # Debug logging
 axm2snipe sync -d
 
+# JSON-formatted logs (useful for log aggregators like Splunk or Datadog)
+axm2snipe sync -v --log-format json
+
+# Write logs to a file in addition to stderr
+axm2snipe sync -v --log-file /var/log/axm2snipe.log
+
+# JSON logs to file
+axm2snipe sync -v --log-format json --log-file /var/log/axm2snipe.log
+
 # Print an ABM access token (useful for manual API testing with curl)
 axm2snipe access-token
 
@@ -136,6 +145,8 @@ axm2snipe request https://mdmenrollment.apple.com/server/devices
 | `--config` | Path to config file (default: `settings.yaml`) |
 | `-v, --verbose` | Verbose output (INFO level) |
 | `-d, --debug` | Debug output (DEBUG level) |
+| `--log-file` | Append log output to this file (in addition to stderr) |
+| `--log-format` | Log format: `text` (default) or `json` |
 | `--version` | Show version and exit |
 
 ### Sync Flags

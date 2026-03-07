@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -17,6 +18,16 @@ var log = logrus.New()
 // SetLogLevel sets the logger level for the snipe package.
 func SetLogLevel(level logrus.Level) {
 	log.SetLevel(level)
+}
+
+// SetLogFormatter sets the logger formatter for the snipe package.
+func SetLogFormatter(formatter logrus.Formatter) {
+	log.SetFormatter(formatter)
+}
+
+// SetLogOutput sets the logger output for the snipe package.
+func SetLogOutput(output io.Writer) {
+	log.SetOutput(output)
 }
 
 // ErrDryRun is returned when a write operation is attempted in dry-run mode.

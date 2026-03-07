@@ -34,6 +34,16 @@ func SetLogLevel(level logrus.Level) {
 	log.SetLevel(level)
 }
 
+// SetLogFormatter sets the logger formatter.
+func SetLogFormatter(formatter logrus.Formatter) {
+	log.SetFormatter(formatter)
+}
+
+// SetLogOutput sets the logger output.
+func SetLogOutput(output io.Writer) {
+	log.SetOutput(output)
+}
+
 // Stats tracks sync operation counts.
 type Stats struct {
 	Total    int
