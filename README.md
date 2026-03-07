@@ -8,7 +8,7 @@ Inspired by [jamf2snipe](https://github.com/grokability/jamf2snipe), but connect
 
 - Syncs all devices from Apple Business Manager / Apple School Manager into Snipe-IT as hardware assets
 - Matches existing Snipe-IT models by hardware identifier (e.g. `Mac16,10`), marketing name, or part number
-- Automatically creates Snipe-IT asset models for new device types
+- Automatically creates Snipe-IT asset models for new device types, with optional device images from [appledb.dev](https://appledb.dev/)
 - Automatically creates Snipe-IT suppliers from ABM/ASM purchase sources
 - Fetches AppleCare coverage details for each device
 - Matches existing assets by serial number (create or update)
@@ -162,6 +162,7 @@ axm2snipe request https://mdmenrollment.apple.com/server/devices
 | `sync.product_families` | Filter devices by product family (`Mac`, `iPhone`, `iPad`, `Watch`, `Vision`) |
 | `sync.use_cache` | Same as `--use-cache` flag |
 | `sync.set_name` | Set asset name to "Model (Color)" on create |
+| `sync.model_images` | Fetch device images from appledb.dev for newly created models (default: false) |
 | `sync.supplier_mapping` | Map ABM/ASM purchase source IDs/types to Snipe-IT supplier IDs |
 | `sync.field_mapping` | Map Snipe-IT fields to ABM/AppleCare source values |
 | `snipe_it.computer_category_id` | Category ID for Mac models (overrides `category_id` for Macs) |
@@ -224,7 +225,7 @@ All field mappings are configured in `settings.yaml` under `sync.field_mapping`.
 | `applecare_start` | Coverage start date |
 | `applecare_end` | Coverage end date |
 | `applecare_renewable` | Whether coverage is renewable (true/false) |
-| `applecare_payment_type` | Payment type (auto title-cased: Paid Up Front, Free, etc.) |
+| `applecare_payment_type` | Payment type (auto title-cased: `Paid Up Front`, `Subscription`, `Abe Subscription`, `None`) |
 
 **Standard Snipe-IT fields** (use as the left side of field_mapping):
 
@@ -291,7 +292,7 @@ Alternatively, create them manually:
 | AppleCare Status | radio | ANY | Active, Inactive, Expired |
 | AppleCare Start Date | text | DATE | -- |
 | AppleCare Renewable | listbox | BOOLEAN | true, false |
-| AppleCare Payment Type | radio | ANY | Paid Up Front, Free, Included, None |
+| AppleCare Payment Type | radio | ANY | Paid Up Front, Subscription, Abe Subscription, None |
 | Assigned MDM Server | text | ANY | -- |
 
 ## Slack Notifications
