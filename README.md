@@ -4,6 +4,8 @@ Sync devices from Apple Business Manager (ABM) / Apple School Manager (ASM) into
 
 Inspired by [jamf2snipe](https://github.com/grokability/jamf2snipe), but connects directly to Apple's Business/School Manager API instead of Jamf.
 
+![axm2snipe demo asset](.github/assets/demo-asset.png)
+
 ## Features
 
 - Syncs all devices from Apple Business Manager / Apple School Manager into Snipe-IT as hardware assets
