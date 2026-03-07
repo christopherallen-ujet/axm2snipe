@@ -4,9 +4,13 @@ package sync
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"time"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -687,7 +691,7 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 		return 0, nil
 	}
 
-	newModel, err := e.snipe.CreateModel(ctx, snipeit.Model{
+	model := snipeit.Model{
 		CommonFields: snipeit.CommonFields{Name: modelName},
 		ModelNumber:  modelNumber,
 		Category: snipeit.Category{
@@ -697,7 +701,15 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 			CommonFields: snipeit.CommonFields{ID: e.cfg.SnipeIT.ManufacturerID},
 		},
 		FieldsetID: e.cfg.SnipeIT.CustomFieldsetID,
-	})
+	}
+
+	if e.cfg.Sync.ModelImages && attrs.ProductType != "" {
+		if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
+			model.Image = img
+		}
+	}
+
+	newModel, err := e.snipe.CreateModel(ctx, model)
 	if err != nil {
 		return 0, err
 	}
@@ -1157,6 +1169,81 @@ func deviceSerial(d abmclient.Device) string {
 		return d.Attributes.SerialNumber
 	}
 	return d.ID
+}
+
+// fetchModelImage fetches a device image from appledb.dev for the given
+// hardware identifier (e.g. "Mac16,10") and returns it as a base64 data URI
+// suitable for Snipe-IT's image field. Returns "" on any error.
+func fetchModelImage(ctx context.Context, productType string) string {
+	type appleDBDevice struct {
+		ImageKey string `json:"imageKey"`
+		Colors   []struct {
+			Key string `json:"key"`
+		} `json:"colors"`
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	infoURL := fmt.Sprintf("https://api.appledb.dev/device/%s.json", productType)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, infoURL, nil)
+	if err != nil {
+		return ""
+	}
+	infoResp, err := client.Do(req)
+	if err != nil {
+		log.WithField("product_type", productType).WithError(err).Debug("AppleDB device lookup failed")
+		return ""
+	}
+	defer infoResp.Body.Close()
+	if infoResp.StatusCode != http.StatusOK {
+		log.WithFields(logrus.Fields{"product_type": productType, "status": infoResp.StatusCode}).Debug("AppleDB returned non-200")
+		return ""
+	}
+
+	var dev appleDBDevice
+	if err := json.NewDecoder(infoResp.Body).Decode(&dev); err != nil || dev.ImageKey == "" || len(dev.Colors) == 0 {
+		log.WithField("product_type", productType).Debug("AppleDB response missing imageKey or colors")
+		return ""
+	}
+
+	imgURL := fmt.Sprintf("https://img.appledb.dev/device@main/%s/%s.png", dev.ImageKey, dev.Colors[0].Key)
+	req, err = http.NewRequestWithContext(ctx, http.MethodGet, imgURL, nil)
+	if err != nil {
+		return ""
+	}
+	imgResp, err := client.Do(req)
+	if err != nil {
+		log.WithField("image_url", imgURL).WithError(err).Debug("AppleDB image fetch failed")
+		return ""
+	}
+	defer imgResp.Body.Close()
+	if imgResp.StatusCode != http.StatusOK {
+		log.WithFields(logrus.Fields{"image_url": imgURL, "status": imgResp.StatusCode}).Debug("AppleDB image returned non-200")
+		return ""
+	}
+
+	// Validate content type and cap body size (2 MiB) before buffering.
+	const maxModelImageBytes = 2 << 20
+	if ct := imgResp.Header.Get("Content-Type"); ct != "" && !strings.HasPrefix(ct, "image/") {
+		log.WithFields(logrus.Fields{"image_url": imgURL, "content_type": ct}).Debug("AppleDB returned unexpected content type")
+		return ""
+	}
+	imgBytes, err := io.ReadAll(io.LimitReader(imgResp.Body, maxModelImageBytes+1))
+	if err != nil {
+		log.WithField("image_url", imgURL).WithError(err).Debug("Reading AppleDB image failed")
+		return ""
+	}
+	if len(imgBytes) > maxModelImageBytes {
+		log.WithField("image_url", imgURL).Debug("AppleDB image too large, skipping")
+		return ""
+	}
+	// Verify PNG magic bytes.
+	if len(imgBytes) < 8 || string(imgBytes[:8]) != "\x89PNG\r\n\x1a\n" {
+		log.WithField("image_url", imgURL).Debug("AppleDB image is not a valid PNG, skipping")
+		return ""
+	}
+	log.WithField("image_url", imgURL).Debug("Fetched model image from AppleDB")
+	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(imgBytes)
 }
 
 // formatAssetDiff returns a human-readable summary of an asset diff for logging.
