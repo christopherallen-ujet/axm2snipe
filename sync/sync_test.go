@@ -155,6 +155,51 @@ func TestFilterByProductFamily(t *testing.T) {
 
 // --- diffAsset tests ---
 
+func TestNormalizeBoolStr(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"0", "false"},
+		{"false", "false"},
+		{"FALSE", "false"},
+		{"1", "true"},
+		{"true", "true"},
+		{"TRUE", "true"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := normalizeBoolStr(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeBoolStr(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestDiffAsset_BooleanNormalization(t *testing.T) {
+	// Snipe-IT returns "0"/"1" for BOOLEAN fields; we write "false"/"true".
+	// diffAsset must treat them as equal so we don't send no-op updates.
+	e := &Engine{cfg: &config.Config{}}
+	desired := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_renewable_1":   "false",
+				"_snipeit_mdm_assigned_2": "true",
+			},
+		},
+	}
+	existing := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_renewable_1":   "0", // Snipe-IT stores "0" for false
+				"_snipeit_mdm_assigned_2": "1", // Snipe-IT stores "1" for true
+			},
+		},
+	}
+	if diff := e.diffAsset(desired, existing); diff != nil {
+		t.Errorf("diffAsset should return nil when BOOLEAN values are equivalent (0/false, 1/true), got %+v", diff)
+	}
+}
+
 func TestDiffAsset_NoChanges(t *testing.T) {
 	e := &Engine{cfg: &config.Config{}}
 	desired := &snipeit.Asset{
@@ -203,6 +248,54 @@ func TestDiffAsset_CustomFieldDiff(t *testing.T) {
 	}
 	if _, ok := diff.CustomFields["_snipeit_color_1"]; ok {
 		t.Error("unchanged field _snipeit_color_1 should not be in diff")
+	}
+}
+
+func TestDiffAsset_CustomFieldHTMLEncoding(t *testing.T) {
+	// Snipe-IT HTML-encodes custom field values. A description like
+	// "AppleCare+ Theft & Loss" comes back as "AppleCare+ Theft &amp; Loss".
+	// diffAsset must unescape before comparing.
+	e := &Engine{cfg: &config.Config{}}
+	desired := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_axm_applecare_description_26": "AppleCare+ Theft & Loss",
+			},
+		},
+	}
+	existing := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_axm_applecare_description_26": "AppleCare+ Theft &amp; Loss",
+			},
+		},
+	}
+	if diff := e.diffAsset(desired, existing); diff != nil {
+		t.Errorf("diffAsset should return nil when custom field values differ only by HTML encoding, got %+v", diff)
+	}
+}
+
+func TestDiffAsset_NotesHTMLEncoding(t *testing.T) {
+	// Snipe-IT HTML-encodes special characters (e.g. "&" → "&amp;") when storing
+	// notes. diffAsset must unescape before comparing so descriptions like
+	// "AppleCare+ Theft & Loss" don't trigger a spurious update every sync.
+	e := &Engine{cfg: &config.Config{}}
+	notes := warrantyNotesStart + "\n[Inactive] AppleCare+ Theft & Loss 2025-09-27 to 2025-09-28\n" + warrantyNotesEnd
+	desired := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			Notes:        notes,
+			CustomFields: map[string]string{},
+		},
+	}
+	existing := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			// Snipe-IT returns HTML-encoded version
+			Notes:        warrantyNotesStart + "\n[Inactive] AppleCare+ Theft &amp; Loss 2025-09-27 to 2025-09-28\n" + warrantyNotesEnd,
+			CustomFields: map[string]string{},
+		},
+	}
+	if diff := e.diffAsset(desired, existing); diff != nil {
+		t.Errorf("diffAsset should return nil when notes differ only by HTML encoding, got diff with notes=%q", diff.Notes)
 	}
 }
 
