@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
@@ -25,8 +27,10 @@ var (
 	// Version is the application version, set from main.go.
 	Version string
 
-	verbose bool
-	debug   bool
+	verbose   bool
+	debug     bool
+	logFile   string
+	logFormat string
 )
 
 var log = logrus.New()
@@ -52,28 +56,44 @@ func LoadConfig(cmd *cobra.Command) error {
 	applyStringFlag(cmd, "cache-dir", &Cfg.Sync.CacheDir)
 
 	// Configure log level
+	var level logrus.Level
 	switch {
 	case debug:
-		log.SetLevel(logrus.DebugLevel)
-		abmclient.SetLogLevel(logrus.DebugLevel)
-		axmsync.SetLogLevel(logrus.DebugLevel)
-		notify.SetLogLevel(logrus.DebugLevel)
-		snipe.SetLogLevel(logrus.DebugLevel)
+		level = logrus.DebugLevel
 	case verbose:
-		log.SetLevel(logrus.InfoLevel)
-		abmclient.SetLogLevel(logrus.InfoLevel)
-		axmsync.SetLogLevel(logrus.InfoLevel)
-		notify.SetLogLevel(logrus.InfoLevel)
-		snipe.SetLogLevel(logrus.InfoLevel)
+		level = logrus.InfoLevel
 	default:
-		log.SetLevel(logrus.WarnLevel)
-		abmclient.SetLogLevel(logrus.WarnLevel)
-		axmsync.SetLogLevel(logrus.WarnLevel)
-		notify.SetLogLevel(logrus.WarnLevel)
-		snipe.SetLogLevel(logrus.WarnLevel)
+		level = logrus.WarnLevel
+	}
+	setAllLogLevels(level)
+
+	// Configure formatter
+	var formatter logrus.Formatter
+	if strings.ToLower(logFormat) == "json" {
+		formatter = &logrus.JSONFormatter{}
+	} else {
+		formatter = &logrus.TextFormatter{FullTimestamp: true}
+	}
+	log.SetFormatter(formatter)
+
+	// Configure log output: optionally tee to a file
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+		if err != nil {
+			return fmt.Errorf("opening log file: %w", err)
+		}
+		log.SetOutput(io.MultiWriter(os.Stderr, f))
 	}
 
 	return nil
+}
+
+func setAllLogLevels(level logrus.Level) {
+	log.SetLevel(level)
+	abmclient.SetLogLevel(level)
+	axmsync.SetLogLevel(level)
+	notify.SetLogLevel(level)
+	snipe.SetLogLevel(level)
 }
 
 func applyBoolFlag(cmd *cobra.Command, name string, dst *bool) {
@@ -127,8 +147,6 @@ func newSnipeClient() (*snipe.Client, error) {
 
 // Execute builds the root command, registers subcommands, and runs.
 func Execute() {
-	log.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
-
 	rootCmd := &cobra.Command{
 		Use:          "axm2snipe",
 		Short:        "Sync devices from Apple Business/School Manager into Snipe-IT",
@@ -143,6 +161,8 @@ func Execute() {
 	rootCmd.PersistentFlags().StringVar(&ConfigFile, "config", "settings.yaml", "Path to YAML config file")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output (INFO level)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Debug output (DEBUG level)")
+	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", "", "Append log output to this file (in addition to stderr)")
+	rootCmd.PersistentFlags().StringVar(&logFormat, "log-format", "text", "Log format: text or json")
 
 	syncCmd := NewSyncCmd()
 	downloadCmd := NewDownloadCmd()
