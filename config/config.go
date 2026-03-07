@@ -10,10 +10,19 @@ import (
 
 // Config holds all configuration for axm2snipe.
 type Config struct {
-	ABM    ABMConfig    `yaml:"abm"`
+	ABM     ABMConfig     `yaml:"abm"`
 	SnipeIT SnipeITConfig `yaml:"snipe_it"`
-	Sync   SyncConfig   `yaml:"sync"`
-	Slack  SlackConfig  `yaml:"slack"`
+	Sync    SyncConfig    `yaml:"sync"`
+	Slack   SlackConfig   `yaml:"slack"`
+	Log     LogConfig     `yaml:"log"`
+}
+
+// LogConfig holds logging settings that can be set in the config file.
+// CLI flags (--log-file, --log-format, -v, -d) take precedence.
+type LogConfig struct {
+	File   string `yaml:"file"`   // path to log file (appended to stderr)
+	Format string `yaml:"format"` // "text" (default) or "json"
+	Level  string `yaml:"level"`  // "warn" (default), "info", or "debug"
 }
 
 // SlackConfig holds optional Slack webhook notification settings.
