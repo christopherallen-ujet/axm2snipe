@@ -56,6 +56,22 @@ func LoadConfig(cmd *cobra.Command) error {
 	applyBoolFlag(cmd, "update-only", &Cfg.Sync.UpdateOnly)
 	applyStringFlag(cmd, "cache-dir", &Cfg.Sync.CacheDir)
 
+	// Seed log settings from config file; CLI flags take precedence.
+	if Cfg.Log.Level != "" && !debug && !verbose {
+		switch strings.ToLower(Cfg.Log.Level) {
+		case "debug":
+			debug = true
+		case "info":
+			verbose = true
+		}
+	}
+	if Cfg.Log.File != "" && !cmd.Flags().Changed("log-file") {
+		logFile = Cfg.Log.File
+	}
+	if Cfg.Log.Format != "" && !cmd.Flags().Changed("log-format") {
+		logFormat = Cfg.Log.Format
+	}
+
 	// Configure log level
 	var level logrus.Level
 	switch {
