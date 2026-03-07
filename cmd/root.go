@@ -117,7 +117,7 @@ func newABMClient(ctx context.Context) (*abmclient.Client, error) {
 // newSnipeClient creates and returns a new Snipe-IT client from global config.
 func newSnipeClient() (*snipe.Client, error) {
 	log.Info("Connecting to Snipe-IT...")
-	client, err := snipe.NewClient(Cfg.SnipeIT.URL, Cfg.SnipeIT.APIKey)
+	client, err := snipe.NewClient(Cfg.SnipeIT.URL, Cfg.SnipeIT.APIKey, Cfg.Sync.RateLimit)
 	if err != nil {
 		return nil, fmt.Errorf("creating Snipe-IT client: %w", err)
 	}

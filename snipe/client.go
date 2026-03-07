@@ -28,11 +28,30 @@ type Client struct {
 	DryRun bool
 }
 
+// snipeLogger adapts the package-level logrus logger to the snipeit.Logger interface.
+type snipeLogger struct{}
+
+func (l *snipeLogger) LogRequest(method, url string, body []byte) {
+	log.WithFields(logrus.Fields{"method": method, "url": url}).Trace("snipe-it request")
+}
+
+func (l *snipeLogger) LogResponse(method, url string, statusCode int, body []byte) {
+	log.WithFields(logrus.Fields{"method": method, "url": url, "status": statusCode}).Trace("snipe-it response")
+}
+
 // NewClient creates a new Snipe-IT client.
-func NewClient(baseURL, apiKey string) (*Client, error) {
+// When rateLimit is true, a token bucket rate limiter (2 req/s, burst 5) is applied.
+func NewClient(baseURL, apiKey string, rateLimit bool) (*Client, error) {
 	baseURL = strings.TrimRight(baseURL, "/")
 
-	sc, err := snipeit.NewClient(baseURL, apiKey)
+	opts := &snipeit.ClientOptions{
+		Logger: &snipeLogger{},
+	}
+	if rateLimit {
+		opts.RateLimiter = snipeit.NewTokenBucketRateLimiter(2, 5)
+	}
+
+	sc, err := snipeit.NewClientWithOptions(baseURL, apiKey, opts)
 	if err != nil {
 		return nil, fmt.Errorf("creating snipe-it client: %w", err)
 	}
