@@ -103,7 +103,7 @@ sync:
   #   AppleCare Status     -> radio, values: Active/Inactive/Expired
   #   AppleCare Start Date -> text, format: DATE
   #   AppleCare Renewable  -> listbox, format: BOOLEAN, values: true/false
-  #   AppleCare Payment    -> radio, values: Paid Up Front/Free/Included/None
+  #   AppleCare Payment    -> radio, values: Paid Up Front/Subscription/Abe Subscription/None
   #   Assigned MDM Server  -> text, format: ANY
   #
   # field_mapping:
