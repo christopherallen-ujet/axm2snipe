@@ -63,6 +63,7 @@ func LoadConfig(cmd *cobra.Command) error {
 	effectiveLogFile := logFile
 	effectiveLogFormat := logFormat
 
+	var unknownLogLevelMsg string
 	if Cfg.Log.Level != "" && !cmd.Flags().Changed("debug") && !cmd.Flags().Changed("verbose") {
 		switch strings.ToLower(Cfg.Log.Level) {
 		case "debug":
@@ -72,7 +73,7 @@ func LoadConfig(cmd *cobra.Command) error {
 		case "warn", "warning":
 			// default, no action needed
 		default:
-			log.Warnf("Unknown log.level %q in config, using default (warn)", Cfg.Log.Level)
+			unknownLogLevelMsg = fmt.Sprintf("Unknown log.level %q in config, using default (warn)", Cfg.Log.Level)
 		}
 	}
 	if Cfg.Log.File != "" && !cmd.Flags().Changed("log-file") {
@@ -102,7 +103,7 @@ func LoadConfig(cmd *cobra.Command) error {
 	case "text", "":
 		formatter = &logrus.TextFormatter{FullTimestamp: true}
 	default:
-		return fmt.Errorf("invalid --log-format %q: must be 'text' or 'json'", effectiveLogFormat)
+		return fmt.Errorf("invalid log format %q: must be 'text' or 'json'", effectiveLogFormat)
 	}
 	setAllLogFormatters(formatter)
 
@@ -119,6 +120,11 @@ func LoadConfig(cmd *cobra.Command) error {
 		}
 		logFileFD = f
 		setAllLogOutputs(io.MultiWriter(os.Stderr, f))
+	}
+
+	// Emit deferred warning after format/output are configured.
+	if unknownLogLevelMsg != "" {
+		log.Warn(unknownLogLevelMsg)
 	}
 
 	return nil
