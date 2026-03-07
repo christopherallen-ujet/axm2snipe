@@ -7,13 +7,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
-	"time"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/schollz/progressbar/v3"
 	snipeit "github.com/CampusTech/go-snipeit"
@@ -874,15 +875,19 @@ func (e *Engine) diffAsset(desired *snipeit.Asset, existing *snipeit.Asset) *sni
 	// Compare full notes string; desired.Notes already contains the existing
 	// content with only the sentinel block replaced, so a difference here means
 	// the warranty block changed.
-	if desired.Notes != "" && desired.Notes != existing.Notes {
+	// Snipe-IT HTML-encodes special characters (e.g. "&" → "&amp;") when storing
+	// notes, so unescape the existing value before comparing.
+	if desired.Notes != "" && desired.Notes != html.UnescapeString(existing.Notes) {
 		diff.Notes = desired.Notes
 		hasChanges = true
 	}
 
-	// Compare custom fields
+	// Compare custom fields. Snipe-IT HTML-encodes field values via e()
+	// (htmlspecialchars) in its API transformer, and BOOLEAN fields are stored
+	// as "0"/"1" while we write "false"/"true". Normalize both before comparing.
 	for key, desiredVal := range desired.CustomFields {
-		currentVal := existing.CustomFields[key]
-		if currentVal != desiredVal {
+		currentVal := html.UnescapeString(existing.CustomFields[key])
+		if normalizeBoolStr(currentVal) != normalizeBoolStr(desiredVal) {
 			diff.CustomFields[key] = desiredVal
 			hasChanges = true
 		}
@@ -1110,6 +1115,21 @@ func applyWarrantyNotes(asset *snipeit.Asset, coverage *abmclient.CoverageResult
 		asset.Notes = strings.TrimSpace(existing) + "\n\n" + block
 	} else {
 		asset.Notes = block
+	}
+}
+
+// normalizeBoolStr normalizes boolean string representations so that "0"/"false"
+// and "1"/"true" compare as equal. Snipe-IT returns "0"/"1" for BOOLEAN format
+// fields on GET, but callers may write "false"/"true". Non-boolean strings are
+// returned as-is (lowercased for case-insensitive comparison).
+func normalizeBoolStr(s string) string {
+	switch strings.ToLower(s) {
+	case "0", "false":
+		return "false"
+	case "1", "true":
+		return "true"
+	default:
+		return strings.ToLower(s)
 	}
 }
 
