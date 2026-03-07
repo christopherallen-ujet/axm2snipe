@@ -32,11 +32,11 @@ type Client struct {
 type snipeLogger struct{}
 
 func (l *snipeLogger) LogRequest(method, url string, body []byte) {
-	log.WithFields(logrus.Fields{"method": method, "url": url}).Trace("snipe-it request")
+	log.WithFields(logrus.Fields{"method": method, "url": url}).Debug("snipe-it request")
 }
 
 func (l *snipeLogger) LogResponse(method, url string, statusCode int, body []byte) {
-	log.WithFields(logrus.Fields{"method": method, "url": url, "status": statusCode}).Trace("snipe-it response")
+	log.WithFields(logrus.Fields{"method": method, "url": url, "status": statusCode}).Debug("snipe-it response")
 }
 
 // NewClient creates a new Snipe-IT client.
