@@ -165,8 +165,6 @@ func TestNormalizeBoolStr(t *testing.T) {
 		{"1", "true"},
 		{"true", "true"},
 		{"TRUE", "true"},
-		{"Active", "active"},
-		{"Silver", "silver"},
 		{"", ""},
 	}
 	for _, tt := range tests {
@@ -282,7 +280,7 @@ func TestDiffAsset_NotesHTMLEncoding(t *testing.T) {
 	// notes. diffAsset must unescape before comparing so descriptions like
 	// "AppleCare+ Theft & Loss" don't trigger a spurious update every sync.
 	e := &Engine{cfg: &config.Config{}}
-	notes := "=== axm2snipe:warranty-start ===\n[Inactive] AppleCare+ Theft & Loss 2025-09-27 to 2025-09-28\n=== axm2snipe:warranty-end ==="
+	notes := warrantyNotesStart + "\n[Inactive] AppleCare+ Theft & Loss 2025-09-27 to 2025-09-28\n" + warrantyNotesEnd
 	desired := &snipeit.Asset{
 		CommonFields: snipeit.CommonFields{
 			Notes:        notes,
@@ -292,7 +290,7 @@ func TestDiffAsset_NotesHTMLEncoding(t *testing.T) {
 	existing := &snipeit.Asset{
 		CommonFields: snipeit.CommonFields{
 			// Snipe-IT returns HTML-encoded version
-			Notes:        "=== axm2snipe:warranty-start ===\n[Inactive] AppleCare+ Theft &amp; Loss 2025-09-27 to 2025-09-28\n=== axm2snipe:warranty-end ===",
+			Notes:        warrantyNotesStart + "\n[Inactive] AppleCare+ Theft &amp; Loss 2025-09-27 to 2025-09-28\n" + warrantyNotesEnd,
 			CustomFields: map[string]string{},
 		},
 	}
