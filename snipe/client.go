@@ -115,11 +115,22 @@ func (c *Client) CreateSupplier(ctx context.Context, name string) (*snipeit.Supp
 }
 
 // GetAssetBySerial looks up an asset by serial number.
+// The Snipe-IT /byserial endpoint performs a partial search, so we filter
+// the results to exact case-insensitive matches to avoid updating the wrong asset.
 func (c *Client) GetAssetBySerial(ctx context.Context, serial string) (*snipeit.AssetsResponse, error) {
 	resp, _, err := c.Assets.GetAssetBySerialContext(ctx, serial)
 	if err != nil {
 		return nil, fmt.Errorf("looking up serial %s: %w", serial, err)
 	}
+	// Filter to exact matches only.
+	exact := resp.Rows[:0]
+	for _, a := range resp.Rows {
+		if strings.EqualFold(a.Serial, serial) {
+			exact = append(exact, a)
+		}
+	}
+	resp.Rows = exact
+	resp.Total = len(exact)
 	return resp, nil
 }
 
