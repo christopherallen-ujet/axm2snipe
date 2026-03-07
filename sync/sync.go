@@ -1093,69 +1093,13 @@ func applyWarrantyNotes(asset *snipeit.Asset, coverage *abmclient.CoverageResult
 		}
 	}
 
-	// Compute column widths (max of header and all row values)
-	widths := make([]int, len(headers))
-	for i, h := range headers {
-		widths[i] = len(h)
-	}
-	for _, row := range rows {
-		for i, cell := range row {
-			if len(cell) > widths[i] {
-				widths[i] = len(cell)
-			}
-		}
-	}
-
-	// Render Unicode box-drawing table
+	// Render pipe-separated table with header row
 	var sb strings.Builder
 	sb.WriteString(warrantyNotesStart + "\n")
-
-	// Top border
-	sb.WriteString("┌")
-	for i, w := range widths {
-		sb.WriteString(strings.Repeat("─", w+2))
-		if i < len(widths)-1 {
-			sb.WriteString("┬")
-		}
-	}
-	sb.WriteString("┐\n")
-
-	// Header row
-	sb.WriteString("│")
-	for i, h := range headers {
-		sb.WriteString(fmt.Sprintf(" %-*s │", widths[i], h))
-	}
-	sb.WriteString("\n")
-
-	// Header separator
-	sb.WriteString("├")
-	for i, w := range widths {
-		sb.WriteString(strings.Repeat("─", w+2))
-		if i < len(widths)-1 {
-			sb.WriteString("┼")
-		}
-	}
-	sb.WriteString("┤\n")
-
-	// Data rows
+	sb.WriteString(strings.Join(headers, " | ") + "\n")
 	for _, row := range rows {
-		sb.WriteString("│")
-		for i, cell := range row {
-			sb.WriteString(fmt.Sprintf(" %-*s │", widths[i], cell))
-		}
-		sb.WriteString("\n")
+		sb.WriteString(strings.Join(row, " | ") + "\n")
 	}
-
-	// Bottom border
-	sb.WriteString("└")
-	for i, w := range widths {
-		sb.WriteString(strings.Repeat("─", w+2))
-		if i < len(widths)-1 {
-			sb.WriteString("┴")
-		}
-	}
-	sb.WriteString("┘\n")
-
 	sb.WriteString(warrantyNotesEnd)
 	block := sb.String()
 
