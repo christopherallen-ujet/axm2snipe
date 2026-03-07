@@ -210,13 +210,8 @@ type PurchaseSource struct {
 	ID   string // purchaseSourceId (may be empty)
 }
 
-// GetAllPurchaseSources fetches all devices and returns the unique purchase sources.
-func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, error) {
-	devices, _, err := c.abm.FetchAllOrgDevices(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("fetching devices: %w", err)
-	}
-
+// collectPurchaseSources extracts unique purchase sources from a slice of ABM devices.
+func collectPurchaseSources(devices []abm.OrgDevice) []PurchaseSource {
 	seen := make(map[PurchaseSource]bool)
 	var sources []PurchaseSource
 	for _, d := range devices {
@@ -233,7 +228,16 @@ func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, e
 			sources = append(sources, ps)
 		}
 	}
-	return sources, nil
+	return sources
+}
+
+// GetAllPurchaseSources fetches all devices and returns the unique purchase sources.
+func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, error) {
+	devices, _, err := c.abm.FetchAllOrgDevices(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetching devices: %w", err)
+	}
+	return collectPurchaseSources(devices), nil
 }
 
 // CoverageResult holds both the "winning" AppleCare record and the full list

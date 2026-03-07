@@ -6,24 +6,27 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/CampusTech/axm2snipe/abmclient"
 	"github.com/CampusTech/axm2snipe/config"
 	"github.com/CampusTech/axm2snipe/snipe"
 )
 
 // NewSetupCmd creates the setup command.
 func NewSetupCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "setup",
 		Short: "Create AXM custom fields in Snipe-IT",
 		Long:  "Creates AXM custom fields in Snipe-IT, associates them with the configured fieldset, and saves the resulting field mappings to the config file.",
 		RunE:  runSetup,
 	}
+	cmd.Flags().Bool("use-cache", true, "Use cached devices.json for purchase source discovery instead of fetching from ABM")
+	return cmd
 }
 
 func runSetup(cmd *cobra.Command, args []string) error {
-	if err := Cfg.ValidateABM(); err != nil {
-		return err
-	}
+	useCache, _ := cmd.Flags().GetBool("use-cache")
+	applyBoolFlag(cmd, "use-cache", &Cfg.Sync.UseCache)
+
 	if err := Cfg.ValidateSnipeIT(); err != nil {
 		return err
 	}
@@ -38,9 +41,17 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	ctx, cancel := contextWithSignal()
 	defer cancel()
 
-	abmClient, err := newABMClient(ctx)
-	if err != nil {
-		return err
+	// ABM client is only needed when not using cache (for MDM servers + purchase sources)
+	var abmClient *abmclient.Client
+	if !useCache {
+		if err := Cfg.ValidateABM(); err != nil {
+			return err
+		}
+		var err error
+		abmClient, err = newABMClient(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	snipeClient, err := newSnipeClient()
@@ -49,24 +60,26 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Fetch MDM server names from ABM for the Assigned MDM Server field options
-	log.Info("Fetching MDM servers from ABM...")
-	mdmServerNames, err := abmClient.GetMDMServers(ctx)
-	if err != nil {
-		log.Warnf("Could not fetch MDM servers: %v (Assigned MDM Server field will be a text field)", err)
-	}
-
 	mdmServerField := snipe.FieldDef{Name: "AXM: Assigned MDM Server", Element: "text", Format: "ANY", HelpText: "MDM server assigned in Apple Business/School Manager"}
-	if len(mdmServerNames) > 0 {
-		var names []string
-		for _, name := range mdmServerNames {
-			if name != "" {
-				names = append(names, name)
+	if useCache {
+		log.Info("Skipping MDM server fetch (--use-cache); Assigned MDM Server field will be a text field")
+	} else {
+		log.Info("Fetching MDM servers from ABM...")
+		mdmServers, err := abmClient.GetMDMServers(ctx)
+		if err != nil {
+			log.Warnf("Could not fetch MDM servers: %v (Assigned MDM Server field will be a text field)", err)
+		} else {
+			var names []string
+			for _, name := range mdmServers {
+				if name != "" {
+					names = append(names, name)
+				}
 			}
-		}
-		if len(names) > 0 {
-			mdmServerField.Element = "listbox"
-			mdmServerField.FieldValues = strings.Join(names, "\n")
-			log.Infof("Found %d MDM servers: %s", len(names), strings.Join(names, ", "))
+			if len(names) > 0 {
+				mdmServerField.Element = "listbox"
+				mdmServerField.FieldValues = strings.Join(names, "\n")
+				log.Infof("Found %d MDM servers: %s", len(names), strings.Join(names, ", "))
+			}
 		}
 	}
 
@@ -111,14 +124,19 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Build field mapping: DB column -> ABM attribute
 	fieldMapping := make(map[string]string)
+	// replaceValues is the set of ABM attribute values managed by setup —
+	// existing config entries with these values will be replaced so stale
+	// field IDs from a previous run don't accumulate.
+	replaceValues := make(map[string]bool)
 	for name, dbCol := range results {
 		if attr, ok := abmAttr[name]; ok {
 			fieldMapping[dbCol] = attr
+			replaceValues[attr] = true
 		}
 	}
 
-	// Save to config file
-	if err := config.MergeFieldMapping(ConfigFile, fieldMapping); err != nil {
+	// Save to config file, replacing any stale mappings for attributes we manage
+	if err := config.MergeFieldMapping(ConfigFile, fieldMapping, replaceValues); err != nil {
 		log.Warnf("Could not save field mappings to %s: %v", ConfigFile, err)
 		fmt.Println("\nAdd these to your settings.yaml field_mapping manually:")
 		for dbCol, attr := range fieldMapping {
@@ -137,12 +155,26 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Fetch purchase sources from ABM and write supplier_mapping scaffold
-	log.Info("Fetching purchase sources from ABM (this fetches all devices)...")
-	purchaseSources, err := abmClient.GetAllPurchaseSources(ctx)
-	if err != nil {
-		log.Warnf("Could not fetch purchase sources: %v", err)
-	} else if len(purchaseSources) > 0 {
+	// Fetch purchase sources and write supplier_mapping scaffold
+	var purchaseSources []abmclient.PurchaseSource
+	cacheDir := Cfg.Sync.CacheDir
+	if cacheDir == "" {
+		cacheDir = ".cache"
+	}
+	if useCache {
+		log.Infof("Loading purchase sources from cache (%s/devices.json)...", cacheDir)
+		purchaseSources, err = abmclient.GetPurchaseSourcesFromCache(cacheDir)
+		if err != nil {
+			log.Warnf("Could not load purchase sources from cache: %v", err)
+		}
+	} else {
+		log.Info("Fetching purchase sources from ABM (this fetches all devices)...")
+		purchaseSources, err = abmClient.GetAllPurchaseSources(ctx)
+		if err != nil {
+			log.Warnf("Could not fetch purchase sources: %v", err)
+		}
+	}
+	if len(purchaseSources) > 0 {
 		var entries []config.SupplierEntry
 		for _, ps := range purchaseSources {
 			if ps.Type == "MANUALLY_ADDED" {

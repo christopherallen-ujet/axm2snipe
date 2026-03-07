@@ -300,7 +300,7 @@ func TestMergeFieldMapping(t *testing.T) {
 		"_snipeit_status_2": "applecare_status",
 	}
 
-	if err := MergeFieldMapping(path, newMappings); err != nil {
+	if err := MergeFieldMapping(path, newMappings, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -329,7 +329,7 @@ func TestMergeFieldMapping_EmptyFile(t *testing.T) {
 		"_snipeit_mac_1": "wifi_mac",
 	}
 
-	if err := MergeFieldMapping(path, newMappings); err != nil {
+	if err := MergeFieldMapping(path, newMappings, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -355,7 +355,7 @@ func TestMergeFieldMapping_SkipsEmptyKeys(t *testing.T) {
 		"valid_key": "",         // empty value — skip
 	}
 
-	if err := MergeFieldMapping(path, newMappings); err != nil {
+	if err := MergeFieldMapping(path, newMappings, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -365,5 +365,43 @@ func TestMergeFieldMapping_SkipsEmptyKeys(t *testing.T) {
 	}
 	if len(cfg.Sync.FieldMapping) != 1 {
 		t.Errorf("should only have 1 mapping, got %d", len(cfg.Sync.FieldMapping))
+	}
+}
+
+func TestMergeFieldMapping_ReplaceStaleIDs(t *testing.T) {
+	// Simulates setup running a second time: old field ID _snipeit_color_7 should
+	// be replaced by new _snipeit_color_99 because "color" is in replaceValues.
+	// The unmanaged entry "manual_key: custom" must be preserved.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.yaml")
+
+	initial := `sync:
+  field_mapping:
+    _snipeit_color_7: color
+    manual_key: custom
+`
+	if err := os.WriteFile(path, []byte(initial), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	newMappings := map[string]string{"_snipeit_color_99": "color"}
+	replaceValues := map[string]bool{"color": true}
+
+	if err := MergeFieldMapping(path, newMappings, replaceValues); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := cfg.Sync.FieldMapping["_snipeit_color_7"]; ok {
+		t.Error("stale field ID should have been removed")
+	}
+	if cfg.Sync.FieldMapping["_snipeit_color_99"] != "color" {
+		t.Error("new field ID should be present")
+	}
+	if cfg.Sync.FieldMapping["manual_key"] != "custom" {
+		t.Error("unmanaged entry should be preserved")
 	}
 }

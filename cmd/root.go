@@ -239,8 +239,8 @@ func Execute() {
 		cmd.Flags().Bool("dry-run", false, "Simulate without making changes")
 	}
 
-	// --cache-dir: download, sync
-	for _, cmd := range []*cobra.Command{downloadCmd, syncCmd} {
+	// --cache-dir: download, sync, setup
+	for _, cmd := range []*cobra.Command{downloadCmd, syncCmd, setupCmd} {
 		cmd.Flags().String("cache-dir", "", `Directory for cached API responses (default ".cache")`)
 	}
 

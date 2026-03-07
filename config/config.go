@@ -164,9 +164,11 @@ func (c *Config) ValidateSnipeIT() error {
 }
 
 // MergeFieldMapping reads a YAML config file, merges new field mappings into
-// sync.field_mapping (without overwriting existing entries), and writes it back.
+// sync.field_mapping and writes it back. If replaceValues is non-nil, any
+// existing entries whose ABM attribute value is in that set are removed first
+// (used by setup to replace stale field IDs with fresh ones).
 // Comments and structure are preserved via yaml.v3 node API.
-func MergeFieldMapping(path string, newMappings map[string]string) error {
+func MergeFieldMapping(path string, newMappings map[string]string, replaceValues map[string]bool) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("reading config file: %w", err)
@@ -191,7 +193,18 @@ func MergeFieldMapping(path string, newMappings map[string]string) error {
 	// Find or create "field_mapping" mapping under sync
 	fmNode := findOrCreateMapping(syncNode, "field_mapping")
 
-	// Build set of existing keys
+	// Remove stale entries whose value is in replaceValues
+	if len(replaceValues) > 0 {
+		var kept []*yaml.Node
+		for i := 0; i < len(fmNode.Content)-1; i += 2 {
+			if !replaceValues[fmNode.Content[i+1].Value] {
+				kept = append(kept, fmNode.Content[i], fmNode.Content[i+1])
+			}
+		}
+		fmNode.Content = kept
+	}
+
+	// Build set of remaining keys
 	existing := make(map[string]bool)
 	for i := 0; i < len(fmNode.Content)-1; i += 2 {
 		existing[fmNode.Content[i].Value] = true

@@ -271,6 +271,9 @@ type FieldDef struct {
 // SetupFields creates or updates custom fields in Snipe-IT and associates them
 // with the given fieldset. Returns a map of field name -> db_column_name.
 func (c *Client) SetupFields(fieldsetID int, fields []FieldDef) (map[string]string, error) {
+	if c.DryRun {
+		return nil, ErrDryRun
+	}
 	existing, _, err := c.Fields.List(nil)
 	if err != nil {
 		return nil, fmt.Errorf("listing existing fields: %w", err)
