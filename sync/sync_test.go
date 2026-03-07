@@ -280,7 +280,18 @@ func TestDiffAsset_NotesHTMLEncoding(t *testing.T) {
 	// notes. diffAsset must unescape before comparing so descriptions like
 	// "AppleCare+ Theft & Loss" don't trigger a spurious update every sync.
 	e := &Engine{cfg: &config.Config{}}
-	notes := warrantyNotesStart + "\n[Inactive] AppleCare+ Theft & Loss 2025-09-27 to 2025-09-28\n" + warrantyNotesEnd
+	// Generate a real table-formatted notes block via applyWarrantyNotes so the
+	// test stays in sync with the actual format automatically.
+	ac := abmclient.AppleCareCoverage{
+		Status:        "INACTIVE",
+		Description:   "AppleCare+ Theft & Loss",
+		StartDateTime: time.Date(2025, 9, 27, 0, 0, 0, 0, time.UTC),
+		EndDateTime:   time.Date(2025, 9, 28, 0, 0, 0, 0, time.UTC),
+	}
+	base := &snipeit.Asset{}
+	applyWarrantyNotes(base, &abmclient.CoverageResult{Best: &ac, All: []abmclient.AppleCareCoverage{ac}})
+	notes := base.Notes
+
 	desired := &snipeit.Asset{
 		CommonFields: snipeit.CommonFields{
 			Notes:        notes,
@@ -289,8 +300,8 @@ func TestDiffAsset_NotesHTMLEncoding(t *testing.T) {
 	}
 	existing := &snipeit.Asset{
 		CommonFields: snipeit.CommonFields{
-			// Snipe-IT returns HTML-encoded version
-			Notes:        warrantyNotesStart + "\n[Inactive] AppleCare+ Theft &amp; Loss 2025-09-27 to 2025-09-28\n" + warrantyNotesEnd,
+			// Snipe-IT returns HTML-encoded version: & → &amp;
+			Notes:        strings.ReplaceAll(notes, "&", "&amp;"),
 			CustomFields: map[string]string{},
 		},
 	}
@@ -957,7 +968,7 @@ func TestApplyWarrantyNotes_ReplaceBlockAtStart(t *testing.T) {
 
 func TestApplyWarrantyNotes_NilCoverageRemovesBlock(t *testing.T) {
 	// Build notes that contain a sentinel block flanked by manual text.
-	existing := "Manual before.\n\n" + warrantyNotesStart + "\n[Active] AppleCare+ for Mac\n" + warrantyNotesEnd + "\n\nManual after."
+	existing := "Manual before.\n\n" + warrantyNotesStart + "\n│ Active │ AppleCare+ for Mac │\n" + warrantyNotesEnd + "\n\nManual after."
 	asset := &snipeit.Asset{}
 	asset.Notes = existing
 

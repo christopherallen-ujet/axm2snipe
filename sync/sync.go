@@ -1071,21 +1071,91 @@ func applyWarrantyNotes(asset *snipeit.Asset, coverage *abmclient.CoverageResult
 		return
 	}
 
+	// Build rows: [Status, Coverage, Start, End, Agreement, Payment]
+	headers := []string{"Status", "Coverage", "Start", "End", "Agreement", "Payment"}
+	rows := make([][]string, len(coverage.All))
+	for i, c := range coverage.All {
+		agreement := c.AgreementNumber
+		if agreement == "" {
+			agreement = "N/A"
+		}
+		payment := titleCase(c.PaymentType)
+		if payment == "" || strings.ToUpper(c.PaymentType) == "NONE" {
+			payment = "None"
+		}
+		rows[i] = []string{
+			titleCase(c.Status),
+			c.Description,
+			c.StartDateTime.Format("2006-01-02"),
+			c.EndDateTime.Format("2006-01-02"),
+			agreement,
+			payment,
+		}
+	}
+
+	// Compute column widths (max of header and all row values)
+	widths := make([]int, len(headers))
+	for i, h := range headers {
+		widths[i] = len(h)
+	}
+	for _, row := range rows {
+		for i, cell := range row {
+			if len(cell) > widths[i] {
+				widths[i] = len(cell)
+			}
+		}
+	}
+
+	// Render Unicode box-drawing table
 	var sb strings.Builder
 	sb.WriteString(warrantyNotesStart + "\n")
-	for _, c := range coverage.All {
-		status := titleCase(c.Status)
-		start := c.StartDateTime.Format("2006-01-02")
-		end := c.EndDateTime.Format("2006-01-02")
-		line := fmt.Sprintf("[%s] %-20s %s to %s", status, c.Description, start, end)
-		if c.AgreementNumber != "" {
-			line += " | " + c.AgreementNumber
+
+	// Top border
+	sb.WriteString("┌")
+	for i, w := range widths {
+		sb.WriteString(strings.Repeat("─", w+2))
+		if i < len(widths)-1 {
+			sb.WriteString("┬")
 		}
-		if c.PaymentType != "" && c.PaymentType != "NONE" {
-			line += " | " + titleCase(c.PaymentType)
-		}
-		sb.WriteString(line + "\n")
 	}
+	sb.WriteString("┐\n")
+
+	// Header row
+	sb.WriteString("│")
+	for i, h := range headers {
+		sb.WriteString(fmt.Sprintf(" %-*s │", widths[i], h))
+	}
+	sb.WriteString("\n")
+
+	// Header separator
+	sb.WriteString("├")
+	for i, w := range widths {
+		sb.WriteString(strings.Repeat("─", w+2))
+		if i < len(widths)-1 {
+			sb.WriteString("┼")
+		}
+	}
+	sb.WriteString("┤\n")
+
+	// Data rows
+	for _, row := range rows {
+		sb.WriteString("│")
+		for i, cell := range row {
+			sb.WriteString(fmt.Sprintf(" %-*s │", widths[i], cell))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Bottom border
+	sb.WriteString("└")
+	for i, w := range widths {
+		sb.WriteString(strings.Repeat("─", w+2))
+		if i < len(widths)-1 {
+			sb.WriteString("┴")
+		}
+	}
+	sb.WriteString("┘\n")
+
 	sb.WriteString(warrantyNotesEnd)
 	block := sb.String()
 
