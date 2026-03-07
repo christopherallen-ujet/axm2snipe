@@ -5,8 +5,10 @@ package abmclient
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -217,6 +219,36 @@ func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, e
 		return nil, fmt.Errorf("fetching devices: %w", err)
 	}
 
+	seen := make(map[PurchaseSource]bool)
+	var sources []PurchaseSource
+	for _, d := range devices {
+		if d.Attributes == nil {
+			continue
+		}
+		srcType := string(d.Attributes.PurchaseSourceType)
+		if srcType == "" {
+			continue
+		}
+		ps := PurchaseSource{Type: srcType, ID: d.Attributes.PurchaseSourceID}
+		if !seen[ps] {
+			seen[ps] = true
+			sources = append(sources, ps)
+		}
+	}
+	return sources, nil
+}
+
+// GetPurchaseSourcesFromCache reads devices.json from cacheDir and returns
+// the unique purchase sources without making any ABM API calls.
+func GetPurchaseSourcesFromCache(cacheDir string) ([]PurchaseSource, error) {
+	data, err := os.ReadFile(cacheDir + "/devices.json")
+	if err != nil {
+		return nil, fmt.Errorf("reading devices cache: %w", err)
+	}
+	var devices []Device
+	if err := json.Unmarshal(data, &devices); err != nil {
+		return nil, fmt.Errorf("parsing devices cache: %w", err)
+	}
 	seen := make(map[PurchaseSource]bool)
 	var sources []PurchaseSource
 	for _, d := range devices {
