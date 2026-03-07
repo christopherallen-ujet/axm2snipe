@@ -213,13 +213,8 @@ type PurchaseSource struct {
 	ID   string // purchaseSourceId (may be empty)
 }
 
-// GetAllPurchaseSources fetches all devices and returns the unique purchase sources.
-func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, error) {
-	devices, _, err := c.abm.FetchAllOrgDevices(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("fetching devices: %w", err)
-	}
-
+// collectPurchaseSources extracts unique purchase sources from a slice of ABM devices.
+func collectPurchaseSources(devices []abm.OrgDevice) []PurchaseSource {
 	seen := make(map[PurchaseSource]bool)
 	var sources []PurchaseSource
 	for _, d := range devices {
@@ -236,7 +231,16 @@ func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, e
 			sources = append(sources, ps)
 		}
 	}
-	return sources, nil
+	return sources
+}
+
+// GetAllPurchaseSources fetches all devices and returns the unique purchase sources.
+func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, error) {
+	devices, _, err := c.abm.FetchAllOrgDevices(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetching devices: %w", err)
+	}
+	return collectPurchaseSources(devices), nil
 }
 
 // GetPurchaseSourcesFromCache reads devices.json from cacheDir and returns
@@ -250,23 +254,11 @@ func GetPurchaseSourcesFromCache(cacheDir string) ([]PurchaseSource, error) {
 	if err := json.Unmarshal(data, &devices); err != nil {
 		return nil, fmt.Errorf("parsing devices cache: %w", err)
 	}
-	seen := make(map[PurchaseSource]bool)
-	var sources []PurchaseSource
-	for _, d := range devices {
-		if d.Attributes == nil {
-			continue
-		}
-		srcType := string(d.Attributes.PurchaseSourceType)
-		if srcType == "" {
-			continue
-		}
-		ps := PurchaseSource{Type: srcType, ID: d.Attributes.PurchaseSourceID}
-		if !seen[ps] {
-			seen[ps] = true
-			sources = append(sources, ps)
-		}
+	orgDevices := make([]abm.OrgDevice, len(devices))
+	for i, d := range devices {
+		orgDevices[i] = d.OrgDevice
 	}
-	return sources, nil
+	return collectPurchaseSources(orgDevices), nil
 }
 
 // CoverageResult holds both the "winning" AppleCare record and the full list
