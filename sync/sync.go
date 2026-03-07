@@ -882,7 +882,10 @@ func (e *Engine) diffAsset(desired *snipeit.Asset, existing *snipeit.Asset) *sni
 	// Compare custom fields
 	for key, desiredVal := range desired.CustomFields {
 		currentVal := existing.CustomFields[key]
-		if currentVal != desiredVal {
+		// Normalize boolean representations: Snipe-IT returns "0"/"1" for BOOLEAN
+		// format fields, but we write "false"/"true". Treat them as equivalent so
+		// we don't send a no-op update every sync cycle.
+		if normalizeBoolStr(currentVal) != normalizeBoolStr(desiredVal) {
 			diff.CustomFields[key] = desiredVal
 			hasChanges = true
 		}
@@ -1110,6 +1113,21 @@ func applyWarrantyNotes(asset *snipeit.Asset, coverage *abmclient.CoverageResult
 		asset.Notes = strings.TrimSpace(existing) + "\n\n" + block
 	} else {
 		asset.Notes = block
+	}
+}
+
+// normalizeBoolStr normalizes boolean string representations so that "0"/"false"
+// and "1"/"true" compare as equal. Snipe-IT returns "0"/"1" for BOOLEAN format
+// fields on GET, but callers may write "false"/"true". Non-boolean strings are
+// returned as-is (lowercased for case-insensitive comparison).
+func normalizeBoolStr(s string) string {
+	switch strings.ToLower(s) {
+	case "0", "false":
+		return "false"
+	case "1", "true":
+		return "true"
+	default:
+		return strings.ToLower(s)
 	}
 }
 

@@ -155,6 +155,53 @@ func TestFilterByProductFamily(t *testing.T) {
 
 // --- diffAsset tests ---
 
+func TestNormalizeBoolStr(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"0", "false"},
+		{"false", "false"},
+		{"FALSE", "false"},
+		{"1", "true"},
+		{"true", "true"},
+		{"TRUE", "true"},
+		{"Active", "active"},
+		{"Silver", "silver"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := normalizeBoolStr(tt.input)
+		if got != tt.want {
+			t.Errorf("normalizeBoolStr(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestDiffAsset_BooleanNormalization(t *testing.T) {
+	// Snipe-IT returns "0"/"1" for BOOLEAN fields; we write "false"/"true".
+	// diffAsset must treat them as equal so we don't send no-op updates.
+	e := &Engine{cfg: &config.Config{}}
+	desired := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_renewable_1":   "false",
+				"_snipeit_mdm_assigned_2": "true",
+			},
+		},
+	}
+	existing := &snipeit.Asset{
+		CommonFields: snipeit.CommonFields{
+			CustomFields: map[string]string{
+				"_snipeit_renewable_1":   "0", // Snipe-IT stores "0" for false
+				"_snipeit_mdm_assigned_2": "1", // Snipe-IT stores "1" for true
+			},
+		},
+	}
+	if diff := e.diffAsset(desired, existing); diff != nil {
+		t.Errorf("diffAsset should return nil when BOOLEAN values are equivalent (0/false, 1/true), got %+v", diff)
+	}
+}
+
 func TestDiffAsset_NoChanges(t *testing.T) {
 	e := &Engine{cfg: &config.Config{}}
 	desired := &snipeit.Asset{
