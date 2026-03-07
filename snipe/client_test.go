@@ -74,15 +74,20 @@ func TestPatchAsset_DryRun(t *testing.T) {
 // --- API integration tests (with mock server) ---
 
 func TestGetAssetBySerial(t *testing.T) {
+	// The server simulates Snipe-IT's substring /byserial behaviour: it returns
+	// the exact match, a case-variant, and a partial substring match.  Our
+	// client must filter down to only the exact (case-insensitive) rows.
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/hardware/byserial/TESTSERIAL1" {
 			http.NotFound(w, r)
 			return
 		}
 		resp := map[string]any{
-			"total": 1,
+			"total": 3,
 			"rows": []map[string]any{
-				{"id": 42, "name": "Test Asset"},
+				{"id": 42, "name": "Test Asset", "serial": "TESTSERIAL1"},
+				{"id": 43, "name": "Case Variant", "serial": "testserial1"},
+				{"id": 44, "name": "Substring Match", "serial": "TESTSERIAL10"},
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -93,14 +98,17 @@ func TestGetAssetBySerial(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.Total != 1 {
-		t.Fatalf("expected 1 result, got %d", resp.Total)
+	// Substring row (id=44) must be excluded; exact + case-variant remain.
+	if resp.Total != 2 {
+		t.Fatalf("expected 2 exact matches, got %d", resp.Total)
 	}
-	if len(resp.Rows) == 0 {
-		t.Fatal("expected at least 1 row")
+	if len(resp.Rows) != 2 {
+		t.Fatalf("expected 2 filtered rows, got %d", len(resp.Rows))
 	}
-	if resp.Rows[0].ID != 42 {
-		t.Errorf("expected asset ID 42, got %d", resp.Rows[0].ID)
+	for _, row := range resp.Rows {
+		if row.ID != 42 && row.ID != 43 {
+			t.Errorf("unexpected asset ID %d in results", row.ID)
+		}
 	}
 }
 
