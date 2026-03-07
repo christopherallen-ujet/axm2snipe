@@ -60,6 +60,9 @@ Use `sync --dry-run -v` to verify end-to-end behavior without making changes.
   - New features → add a bullet to the **Features** list
   - New field mapping source values → add a row to the appropriate field mapping table
   - Changed field values (e.g. radio button options) → update the **Recommended Field Types** table
+- **Always update settings.example.yaml** when adding new config options:
+  - Add a commented-out entry under the appropriate section with a clear description
+  - Keep field type hints and valid values up to date (e.g. radio button options in the `field_mapping` comments)
 
 ## Gotchas
 
