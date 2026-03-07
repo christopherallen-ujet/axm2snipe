@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -241,7 +242,7 @@ func (c *Client) GetAllPurchaseSources(ctx context.Context) ([]PurchaseSource, e
 // GetPurchaseSourcesFromCache reads devices.json from cacheDir and returns
 // the unique purchase sources without making any ABM API calls.
 func GetPurchaseSourcesFromCache(cacheDir string) ([]PurchaseSource, error) {
-	data, err := os.ReadFile(cacheDir + "/devices.json")
+	data, err := os.ReadFile(filepath.Join(cacheDir, "devices.json"))
 	if err != nil {
 		return nil, fmt.Errorf("reading devices cache: %w", err)
 	}
