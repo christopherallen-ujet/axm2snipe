@@ -53,7 +53,7 @@ ASSET_TAG     = "DEMO-MBP-001"
 SERIAL        = "C02ZR4XHMD6V"
 
 
-def api(method, path, body=None):
+def api(method, path, body=None, fatal=True):
     url = f"{SNIPE_URL}/api/v1{path}"
     data = json.dumps(body).encode() if body else None
     req = urllib.request.Request(url, data=data, headers=HEADERS, method=method)
@@ -61,8 +61,12 @@ def api(method, path, body=None):
         with urllib.request.urlopen(req) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
-        print(f"HTTP {e.code} {method} {path}: {e.read().decode()}", file=sys.stderr)
-        sys.exit(1)
+        msg = f"HTTP {e.code} {method} {path}: {e.read().decode()}"
+        if fatal:
+            print(msg, file=sys.stderr)
+            sys.exit(1)
+        print(f"  WARNING: {msg}", file=sys.stderr)
+        return {}
 
 
 def find_by_name(rows, name):
@@ -169,7 +173,7 @@ def delete():
     existing = api("GET", f"/hardware/byserial/{SERIAL}")
     if existing.get("total", 0) > 0:
         asset_id = existing["rows"][0]["id"]
-        api("DELETE", f"/hardware/{asset_id}")
+        api("DELETE", f"/hardware/{asset_id}", fatal=False)
         print(f"  Deleted asset id={asset_id}")
     else:
         print("  Asset not found, skipping")
@@ -177,16 +181,19 @@ def delete():
     # Delete model by name
     mdl = find_by_name(api("GET", "/models?limit=500")["rows"], MODEL_NAME)
     if mdl:
-        api("DELETE", f"/models/{mdl['id']}")
+        api("DELETE", f"/models/{mdl['id']}", fatal=False)
         print(f"  Deleted model id={mdl['id']}")
     else:
         print("  Model not found, skipping")
 
-    # Delete fieldset by name
+    # Delete fieldset by name (must disassociate all fields first)
     fs = find_by_name(api("GET", "/fieldsets")["rows"], FIELDSET_NAME)
     if fs:
-        api("DELETE", f"/fieldsets/{fs['id']}")
-        print(f"  Deleted fieldset id={fs['id']}")
+        fid = fs["id"]
+        for field in api("GET", f"/fieldsets/{fid}").get("fields", {}).get("rows", []):
+            api("POST", f"/fields/{field['id']}/disassociate", {"fieldset_id": fid}, fatal=False)
+        api("DELETE", f"/fieldsets/{fid}", fatal=False)
+        print(f"  Deleted fieldset id={fid}")
     else:
         print("  Fieldset not found, skipping")
 
