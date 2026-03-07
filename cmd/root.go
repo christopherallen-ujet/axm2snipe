@@ -57,12 +57,16 @@ func LoadConfig(cmd *cobra.Command) error {
 	applyStringFlag(cmd, "cache-dir", &Cfg.Sync.CacheDir)
 
 	// Seed log settings from config file; CLI flags take precedence.
-	if Cfg.Log.Level != "" && !debug && !verbose {
+	if Cfg.Log.Level != "" && !cmd.Flags().Changed("debug") && !cmd.Flags().Changed("verbose") {
 		switch strings.ToLower(Cfg.Log.Level) {
 		case "debug":
 			debug = true
 		case "info":
 			verbose = true
+		case "warn", "warning":
+			// default, no action needed
+		default:
+			log.Warnf("Unknown log.level %q in config, using default (warn)", Cfg.Log.Level)
 		}
 	}
 	if Cfg.Log.File != "" && !cmd.Flags().Changed("log-file") {
