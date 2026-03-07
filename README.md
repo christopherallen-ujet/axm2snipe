@@ -1,8 +1,12 @@
 # axm2snipe
 
-Sync devices from Apple Business Manager (ABM) / Apple School Manager (ASM) into [Snipe-IT](https://snipeitapp.com/) asset management.
+**The missing link between Apple Business Manager and your asset inventory.**
 
-Inspired by [jamf2snipe](https://github.com/grokability/jamf2snipe), but connects directly to Apple's Business/School Manager API instead of Jamf.
+axm2snipe syncs every device from Apple Business Manager (ABM) or Apple School Manager (ASM) directly into [Snipe-IT](https://snipeitapp.com/) — no MDM required. It maps ABM device attributes, AppleCare coverage, purchase data, and MDM server assignments to fully populated Snipe-IT assets, keeping your inventory accurate and up to date automatically.
+
+Inspired by [jamf2snipe](https://github.com/grokability/jamf2snipe), but connects directly to Apple's device enrollment API instead of going through Jamf. If a device is in ABM or ASM, axm2snipe can sync it — whether or not it's enrolled in MDM.
+
+![Screenshot of a MacBook Pro asset synced from ABM into Snipe-IT](.github/assets/demo-asset.png)
 
 ## Features
 
