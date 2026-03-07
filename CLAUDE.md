@@ -42,10 +42,24 @@ go build -o axm2snipe .
 - **warranty_months calculated from purchase date**: `warranty_months = purchase_date → applecare_end` so Snipe-IT's auto-calculated "Warranty Expires" matches the actual coverage end date.
 - **setup scaffolds supplier_mapping**: The `setup` command connects to ABM, fetches MDM server names (used as listbox options for the Assigned MDM Server field) and all purchase sources. It writes a `supplier_mapping` scaffold to the config with TODO entries for each purchase source, so you can fill in Snipe-IT supplier IDs.
 - **Per-family category IDs**: `snipe_it.computer_category_id` is used for Mac models, `snipe_it.mobile_category_id` for iPhone/iPad/Watch/Vision. Falls back to `snipe_it.category_id`.
+- **Model images from appledb.dev**: When `sync.model_images: true`, `ensureModel()` calls `fetchModelImage(ctx, productType)` using the hardware identifier (e.g. "Mac16,10") to fetch a PNG from appledb.dev and attach it as a base64 data URI. Failures are silently skipped. Only applies to newly created models.
+- **Serial is always the asset tag**: `createAsset()` forces `asset_tag = serial` after `applyFieldMapping()`, so a `field_mapping` entry of `asset_tag: imei` cannot override it.
+- **Exact serial matching**: `GetAssetBySerial` post-filters Snipe-IT's `/byserial` results (which do substring matching) to exact case-insensitive matches, preventing wrong assets from being updated.
+- **Invalid field retry**: `PatchAsset` retries without rejected custom fields when Snipe-IT returns "not available on this Asset Model's fieldset" or "is invalid." errors, logging the rejected fields and reason.
 
 ## Testing
 
-No test files yet. Use `sync --dry-run -v` to verify behavior without making changes.
+Unit tests live in `abmclient/`, `config/`, `snipe/`, and `sync/`. Run with `go test ./...`.
+Use `sync --dry-run -v` to verify end-to-end behavior without making changes.
+
+## Documentation Rules
+
+- **Always update README.md** when adding new config options, CLI flags, or user-facing features:
+  - New `sync.*` or `snipe_it.*` config keys → add a row to the **Config Options** table
+  - New `sync` CLI flags → add a row to the **Sync Flags** table
+  - New features → add a bullet to the **Features** list
+  - New field mapping source values → add a row to the appropriate field mapping table
+  - Changed field values (e.g. radio button options) → update the **Recommended Field Types** table
 
 ## Gotchas
 
