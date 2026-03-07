@@ -27,10 +27,11 @@ var (
 	// Version is the application version, set from main.go.
 	Version string
 
-	verbose   bool
-	debug     bool
-	logFile   string
-	logFormat string
+	verbose    bool
+	debug      bool
+	logFile    string
+	logFormat  string
+	logFileFD  *os.File // held open for the lifetime of the process
 )
 
 var log = logrus.New()
@@ -69,10 +70,13 @@ func LoadConfig(cmd *cobra.Command) error {
 
 	// Configure formatter
 	var formatter logrus.Formatter
-	if strings.ToLower(logFormat) == "json" {
+	switch strings.ToLower(logFormat) {
+	case "json":
 		formatter = &logrus.JSONFormatter{}
-	} else {
+	case "text", "":
 		formatter = &logrus.TextFormatter{FullTimestamp: true}
+	default:
+		return fmt.Errorf("invalid --log-format %q: must be 'text' or 'json'", logFormat)
 	}
 	log.SetFormatter(formatter)
 
@@ -82,6 +86,7 @@ func LoadConfig(cmd *cobra.Command) error {
 		if err != nil {
 			return fmt.Errorf("opening log file: %w", err)
 		}
+		logFileFD = f
 		log.SetOutput(io.MultiWriter(os.Stderr, f))
 	}
 
@@ -155,6 +160,11 @@ func Execute() {
 		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			return LoadConfig(cmd)
+		},
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			if logFileFD != nil {
+				logFileFD.Close()
+			}
 		},
 	}
 
