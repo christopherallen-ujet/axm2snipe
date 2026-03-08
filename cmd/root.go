@@ -56,12 +56,39 @@ func LoadConfig(cmd *cobra.Command) error {
 	applyBoolFlag(cmd, "update-only", &Cfg.Sync.UpdateOnly)
 	applyStringFlag(cmd, "cache-dir", &Cfg.Sync.CacheDir)
 
+	// Compute effective log settings: config file provides defaults,
+	// explicit CLI flags take precedence. Do not mutate the flag-backed globals.
+	effectiveDebug := debug
+	effectiveVerbose := verbose
+	effectiveLogFile := logFile
+	effectiveLogFormat := logFormat
+
+	var unknownLogLevelMsg string
+	if Cfg.Log.Level != "" && !cmd.Flags().Changed("debug") && !cmd.Flags().Changed("verbose") {
+		switch strings.ToLower(Cfg.Log.Level) {
+		case "debug":
+			effectiveDebug = true
+		case "info":
+			effectiveVerbose = true
+		case "warn", "warning":
+			// default, no action needed
+		default:
+			unknownLogLevelMsg = fmt.Sprintf("Unknown log.level %q in config, using default (warn)", Cfg.Log.Level)
+		}
+	}
+	if Cfg.Log.File != "" && !cmd.Flags().Changed("log-file") {
+		effectiveLogFile = Cfg.Log.File
+	}
+	if Cfg.Log.Format != "" && !cmd.Flags().Changed("log-format") {
+		effectiveLogFormat = Cfg.Log.Format
+	}
+
 	// Configure log level
 	var level logrus.Level
 	switch {
-	case debug:
+	case effectiveDebug:
 		level = logrus.DebugLevel
-	case verbose:
+	case effectiveVerbose:
 		level = logrus.InfoLevel
 	default:
 		level = logrus.WarnLevel
@@ -70,13 +97,13 @@ func LoadConfig(cmd *cobra.Command) error {
 
 	// Configure formatter
 	var formatter logrus.Formatter
-	switch strings.ToLower(logFormat) {
+	switch strings.ToLower(effectiveLogFormat) {
 	case "json":
 		formatter = &logrus.JSONFormatter{}
 	case "text", "":
 		formatter = &logrus.TextFormatter{FullTimestamp: true}
 	default:
-		return fmt.Errorf("invalid --log-format %q: must be 'text' or 'json'", logFormat)
+		return fmt.Errorf("invalid log format %q: must be 'text' or 'json'", effectiveLogFormat)
 	}
 	setAllLogFormatters(formatter)
 
@@ -86,13 +113,18 @@ func LoadConfig(cmd *cobra.Command) error {
 		_ = logFileFD.Close()
 		logFileFD = nil
 	}
-	if logFile != "" {
-		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if effectiveLogFile != "" {
+		f, err := os.OpenFile(effectiveLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 		if err != nil {
 			return fmt.Errorf("opening log file: %w", err)
 		}
 		logFileFD = f
 		setAllLogOutputs(io.MultiWriter(os.Stderr, f))
+	}
+
+	// Emit deferred warning after format/output are configured.
+	if unknownLogLevelMsg != "" {
+		log.Warn(unknownLogLevelMsg)
 	}
 
 	return nil
