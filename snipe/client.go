@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
-	snipeit "github.com/CampusTech/go-snipeit"
+	snipeit "github.com/michellepellon/go-snipeit"
 )
 
 var log = logrus.New()

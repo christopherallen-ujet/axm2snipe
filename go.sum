@@ -1,9 +1,5 @@
 github.com/CampusTech/abm v0.0.0-campustech h1:l+BWbYtD5UiVIODWOz0Wu888FRVckP/HR+2ELsIvyOo=
 github.com/CampusTech/abm v0.0.0-campustech/go.mod h1:zYggH/Wlgoi9AwkLR6ahhhBIFJvEcsd9XPa4cTz8yBM=
-github.com/CampusTech/go-snipeit v0.0.0-campustech h1:iDtHFYFPiKoS68HbsqA7ouVevoF2apWQ0sjxY3ufcg0=
-github.com/CampusTech/go-snipeit v0.0.0-campustech/go.mod h1:dzmCr1wp/ZqbcdyYO/R+eWB68ZLIbGH1D01ZV6wfiTs=
-github.com/CampusTech/go-snipeit v0.0.0-campustech.0.20260307000307-3c91c761f05b h1:Mz8SR6+mdhG1cR76NQa7PbAGULLkQTzie/RV7jtVSrQ=
-github.com/CampusTech/go-snipeit v0.0.0-campustech.0.20260307000307-3c91c761f05b/go.mod h1:dzmCr1wp/ZqbcdyYO/R+eWB68ZLIbGH1D01ZV6wfiTs=
 github.com/chengxilo/virtualterm v1.0.4 h1:Z6IpERbRVlfB8WkOmtbHiDbBANU7cimRIof7mk9/PwM=
 github.com/chengxilo/virtualterm v1.0.4/go.mod h1:DyxxBZz/x1iqJjFxTFcr6/x+jSpqN0iwWCOK1q10rlY=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
@@ -24,6 +20,8 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/mattn/go-runewidth v0.0.16 h1:E5ScNMtiwvlvB5paMFdw9p4kSQzbXFikJ5SQO6TULQc=
 github.com/mattn/go-runewidth v0.0.16/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
+github.com/michellepellon/go-snipeit v0.0.0-20260308041334-b4baa85a4d8c h1:ECBfo3wZZNeM9x5A2mPvQKswrxiinMZZIrbP9+44DmU=
+github.com/michellepellon/go-snipeit v0.0.0-20260308041334-b4baa85a4d8c/go.mod h1:N5ro1zf9aciff0dTslglVIuP/xGWxYVuZzkFWvSi08U=
 github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db h1:62I3jR2EmQ4l5rM/4FEfDWcRD+abF5XlKShorW5LRoQ=
 github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db/go.mod h1:l0dey0ia/Uv7NcFFVbCLtqEBQbrT4OCwCSKTEv6enCw=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

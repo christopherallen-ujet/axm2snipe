@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/schollz/progressbar/v3"
-	snipeit "github.com/CampusTech/go-snipeit"
+	snipeit "github.com/michellepellon/go-snipeit"
 	"github.com/sirupsen/logrus"
 	"github.com/CampusTech/abm"
 
