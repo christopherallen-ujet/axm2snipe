@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	snipeit "github.com/CampusTech/go-snipeit"
+	snipeit "github.com/michellepellon/go-snipeit"
 	"github.com/CampusTech/abm"
 
 	"github.com/CampusTech/axm2snipe/abmclient"

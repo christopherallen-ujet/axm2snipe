@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	snipeit "github.com/CampusTech/go-snipeit"
+	snipeit "github.com/michellepellon/go-snipeit"
 )
 
 // newTestClient creates a Client backed by a test HTTP server.
