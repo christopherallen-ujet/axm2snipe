@@ -46,7 +46,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": ":appleinc: :loading: Syncing devices from Apple Business Manager into Snipe-IT..."
+                  "text": ":loading: Syncing devices from Apple Business Manager into Snipe-IT..."
                 }
               }
             ]
@@ -90,37 +90,15 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": ":appleinc: :white_check_mark: Sync completed successfully!"
+                  "text": ":white_check_mark: Sync completed successfully!"
                 }
               },
               {
                 "type": "section",
-                "fields": [
-                  {
-                    "type": "mrkdwn",
-                    "text": ":computer: *Total Devices:*\n${TOTAL}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": ":white_check_mark: *Updated:*\n${UPDATED}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": ":sparkles: *Created:*\n${CREATED}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": ":fast_forward: *Skipped:*\n${SKIPPED}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": ":new: *New Models:*\n${NEW_MODELS}"
-                  },
-                  {
-                    "type": "mrkdwn",
-                    "text": ":warning: *Errors:*\n${ERRORS}"
-                  }
-                ]
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":computer: *Total Devices:* ${TOTAL}\n:white_check_mark: *Updated:* ${UPDATED}\n:sparkles: *Created:* ${CREATED}\n:fast_forward: *Skipped:* ${SKIPPED}\n:new: *New Models:* ${NEW_MODELS}\n:warning: *Errors:* ${ERRORS}"
+                }
               }
             ]
           }
@@ -145,7 +123,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": ":appleinc: :x: The sync workflow failed. Please contact IT to investigate."
+                  "text": ":x: The sync workflow failed. Please contact IT to investigate."
                 }
               },
               {
