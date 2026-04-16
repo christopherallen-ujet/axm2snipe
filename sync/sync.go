@@ -1225,14 +1225,14 @@ func normalizeStorage(s string) string {
 	s = strings.TrimSpace(s)
 	upper := strings.ToUpper(s)
 	if strings.HasSuffix(upper, "TB") {
-		return strings.TrimSpace(s[:len(s)-2]) + "TB"
+		return s
 	}
 	if strings.HasSuffix(upper, "GB") {
-		return strings.TrimSpace(s[:len(s)-2]) + "GB"
+		return s
 	}
-	return s
+	// Just a number — assume GB
+	return s + "GB"
 }
-
 func deviceSerial(d abmclient.Device) string {
 	if d.Attributes != nil {
 		return d.Attributes.SerialNumber
