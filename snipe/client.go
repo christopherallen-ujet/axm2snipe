@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -36,7 +37,9 @@ var ErrDryRun = fmt.Errorf("write blocked: dry-run mode is enabled")
 // Client wraps the go-snipeit client with dry-run enforcement.
 type Client struct {
 	*snipeit.Client
-	DryRun bool
+	DryRun  bool
+	baseURL string
+	apiKey  string
 }
 
 // snipeLogger adapts the package-level logrus logger to the snipeit.Logger interface.
@@ -67,7 +70,7 @@ func NewClient(baseURL, apiKey string, rateLimit bool) (*Client, error) {
 		return nil, fmt.Errorf("creating snipe-it client: %w", err)
 	}
 
-	return &Client{Client: sc}, nil
+	return &Client{Client: sc, baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey}, nil
 }
 
 // ListAllModels returns all models from Snipe-IT, handling pagination.
@@ -104,6 +107,39 @@ func (c *Client) CreateModel(ctx context.Context, model snipeit.Model) (*snipeit
 		return nil, fmt.Errorf("creating model failed: %s", resp.Message)
 	}
 	return &resp.Payload, nil
+}
+
+// PatchModel updates an existing asset model's image by ID.
+func (c *Client) PatchModel(ctx context.Context, id int, imageData string) error {
+	if c.DryRun {
+		return ErrDryRun
+	}
+
+	body, err := json.Marshal(map[string]string{"image": imageData})
+	if err != nil {
+		return fmt.Errorf("marshaling model patch: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch,
+		fmt.Sprintf("%s/api/v1/models/%d", c.baseURL, id),
+		strings.NewReader(string(body)))
+	if err != nil {
+		return fmt.Errorf("creating model patch request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	httpResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("patching model %d: %w", id, err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode >= 300 {
+		return fmt.Errorf("patching model %d: HTTP %d", id, httpResp.StatusCode)
+	}
+	return nil
 }
 
 // ListAllSuppliers returns all suppliers from Snipe-IT, handling pagination.

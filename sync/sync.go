@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -636,8 +635,19 @@ func (e *Engine) processDevice(ctx context.Context, device abmclient.Device) err
 		}
 		return e.createAsset(ctx, logger, device, modelID, supplierID, coverage)
 	case 1:
-		// Update existing asset — model already assigned in Snipe-IT
-		return e.updateAsset(ctx, logger, device, &existing.Rows[0], supplierID, coverage)
+    // Update model image if configured
+    if e.cfg.Sync.ModelImages && attrs.ProductType != "" {
+        modelID := existing.Rows[0].Model.ID
+        if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
+            if err := e.snipe.PatchModel(ctx, modelID, img); err != nil {
+                logger.WithError(err).Warn("Could not update model image, continuing")
+            } else {
+                logger.WithField("model_id", modelID).Debug("Updated model image")
+            }
+        }
+    }
+    // Update existing asset — model already assigned in Snipe-IT
+    return e.updateAsset(ctx, logger, device, &existing.Rows[0], supplierID, coverage)
 	default:
 		logger.Warnf("Multiple assets (%d) found for serial, skipping", existing.Total)
 		e.stats.Skipped++
@@ -653,6 +663,15 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 	// that may already exist in Snipe-IT as model numbers from MDM tools like Jamf
 	if attrs.ProductType != "" {
 		if id, ok := e.models[attrs.ProductType]; ok {
+			if e.cfg.Sync.ModelImages {
+				if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
+					if err := e.snipe.PatchModel(ctx, id, img); err != nil {
+						log.WithError(err).WithField("model_id", id).Warn("Could not update model image, continuing")
+					} else {
+						log.WithField("model_id", id).Debug("Updated model image")
+					}
+				}
+			}
 			return id, nil
 		}
 	}
@@ -660,6 +679,15 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 	// Try matching DeviceModel (e.g. "Mac mini (2024)") against model numbers and names
 	if attrs.DeviceModel != "" {
 		if id, ok := e.models[attrs.DeviceModel]; ok {
+			if e.cfg.Sync.ModelImages && attrs.ProductType != "" {
+				if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
+					if err := e.snipe.PatchModel(ctx, id, img); err != nil {
+						log.WithError(err).WithField("model_id", id).Warn("Could not update model image, continuing")
+					} else {
+						log.WithField("model_id", id).Debug("Updated model image")
+					}
+				}
+			}
 			return id, nil
 		}
 	}
@@ -1197,13 +1225,10 @@ func normalizeStorage(s string) string {
 	s = strings.TrimSpace(s)
 	upper := strings.ToUpper(s)
 	if strings.HasSuffix(upper, "TB") {
-		num := strings.TrimSpace(s[:len(s)-2])
-		if n, err := strconv.Atoi(num); err == nil {
-			return strconv.Itoa(n * 1024)
-		}
+		return strings.TrimSpace(s[:len(s)-2]) + "TB"
 	}
 	if strings.HasSuffix(upper, "GB") {
-		return strings.TrimSpace(s[:len(s)-2])
+		return strings.TrimSpace(s[:len(s)-2]) + "GB"
 	}
 	return s
 }
