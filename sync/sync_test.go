@@ -78,12 +78,12 @@ func TestNormalizeStorage(t *testing.T) {
 	tests := []struct {
 		input, want string
 	}{
-		{"256GB", "256"},
-		{"512GB", "512"},
-		{"1TB", "1024"},
-		{"2TB", "2048"},
+		{"256GB", "256GB"},
+		{"512GB", "512GB"},
+		{"1TB", "1TB"},
+		{"2TB", "2TB"},
 		{"128", "128"},
-		{" 256GB ", "256"},
+		{" 256GB ", "256GB"},
 		{"", ""},
 	}
 	for _, tt := range tests {
@@ -424,7 +424,7 @@ func TestApplyFieldMapping(t *testing.T) {
 
 	checks := map[string]string{
 		"_snipeit_color_1":   "Space Gray",
-		"_snipeit_storage_2": "512",
+		"_snipeit_storage_2": "512GB",
 		"_snipeit_mac_3":     "AA:BB:CC:DD:EE:FF",
 		"_snipeit_status_4":  "Active",
 		"_snipeit_start_5":   "2024-06-15",
