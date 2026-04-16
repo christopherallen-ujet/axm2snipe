@@ -2,7 +2,7 @@
 on:
   schedule:
     # Runs every day at 6:00 AM UTC (11 PM PST)
-    - cron: '0 6 * * *'
+    - cron: '0 18 * * *'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
