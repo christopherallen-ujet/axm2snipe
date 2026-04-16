@@ -1,7 +1,8 @@
+name: ABM to Snipe-IT Sync
 
 on:
   schedule:
-    # Runs every day at 6:00 AM UTC (11 PM PST)
+    # Runs every day at 10:00 AM PST (6 PM UTC)
     - cron: '0 18 * * *'
   workflow_dispatch:  # Allow manual trigger
 
@@ -27,5 +28,92 @@ jobs:
           ${{ secrets.SETTINGS_YAML }}
           EOF
 
+      - name: Notify Slack - sync starting
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data @- ${{ secrets.SLACK_WEBHOOK_URL }} <<'EOF'
+          {
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "ABM → Snipe-IT Sync Started",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":appleinc: :hourglass_flowing_sand: Syncing devices from Apple Business Manager into Snipe-IT..."
+                }
+              }
+            ]
+          }
+          EOF
+
       - name: Run sync
+        id: sync
         run: ./axm2snipe sync --verbose
+
+      - name: Notify Slack - sync complete
+        if: success()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data @- ${{ secrets.SLACK_WEBHOOK_URL }} <<'EOF'
+          {
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "ABM → Snipe-IT Sync Complete",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":appleinc: :white_check_mark: All devices have been synced from Apple Business Manager into Snipe-IT."
+                }
+              }
+            ]
+          }
+          EOF
+
+      - name: Notify Slack - sync failed
+        if: failure()
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data @- ${{ secrets.SLACK_WEBHOOK_URL }} <<'EOF'
+          {
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "ABM → Snipe-IT Sync Failed",
+                  "emoji": true
+                }
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": ":appleinc: :x: The sync workflow failed. Please contact IT to investigate."
+                }
+              },
+              {
+                "type": "context",
+                "elements": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow logs (admin only)>"
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
