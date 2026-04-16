@@ -114,7 +114,7 @@ jobs:
                   },
                   {
                     "type": "mrkdwn",
-                    "text": ":new: :laptop_computer: *New Models:*\n${NEW_MODELS}"
+                    "text": ":new: *New Models:*\n${NEW_MODELS}"
                   },
                   {
                     "type": "mrkdwn",
