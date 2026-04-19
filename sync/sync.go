@@ -580,6 +580,25 @@ func (e *Engine) processDevice(ctx context.Context, device abmclient.Device) err
 
 	logger := log.WithField("serial", serial)
 
+	// Check skip list from SKIP_SERIALS env var
+	if skipList := os.Getenv("SKIP_SERIALS"); skipList != "" {
+		for _, s := range strings.Split(skipList, ",") {
+			if strings.EqualFold(strings.TrimSpace(s), serial) {
+				logger.Info("Serial is in SKIP_SERIALS list — checking for existing asset to soft-delete")
+				existing, err := e.snipe.GetAssetBySerial(ctx, serial)
+				if err == nil && existing.Total > 0 {
+					if err := e.snipe.DeleteAsset(ctx, existing.Rows[0].ID); err != nil {
+						logger.WithError(err).Warn("Could not soft-delete asset from skip list")
+					} else {
+						logger.WithField("asset_id", existing.Rows[0].ID).Info("Soft-deleted asset from Snipe-IT (in skip list)")
+					}
+				}
+				e.stats.Skipped++
+				return nil
+			}
+		}
+	}
+
 	// Skip devices not assigned to an MDM server if configured
 	if e.cfg.Sync.MDMOnly && device.AssignedServer == "" {
 		logger.Info("Skipping device not assigned to any MDM server (mdm_only mode)")

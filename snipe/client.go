@@ -142,6 +142,31 @@ func (c *Client) PatchModel(ctx context.Context, id int, imageData string) error
 	return nil
 }
 
+// DeleteAsset soft-deletes an asset in Snipe-IT by ID
+func (c *Client) DeleteAsset(ctx context.Context, assetID int) error {
+	if c.DryRun {
+		return ErrDryRun
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
+		fmt.Sprintf("%s/api/v1/hardware/%d", c.baseURL, assetID), nil)
+	if err != nil {
+		return fmt.Errorf("creating delete request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Accept", "application/json")
+
+	httpResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("deleting asset %d: %w", assetID, err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode >= 300 {
+		return fmt.Errorf("deleting asset %d: HTTP %d", assetID, httpResp.StatusCode)
+	}
+	return nil
+}
+
 // ListAllSuppliers returns all suppliers from Snipe-IT, handling pagination.
 func (c *Client) ListAllSuppliers(ctx context.Context) ([]snipeit.Supplier, error) {
 	var all []snipeit.Supplier

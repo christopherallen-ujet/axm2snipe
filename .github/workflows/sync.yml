@@ -55,6 +55,8 @@ jobs:
 
       - name: Run sync
         id: sync
+        env:
+          SKIP_SERIALS: ${{ secrets.SKIP_SERIALS }}
         run: |
           ./axm2snipe sync --verbose 2>&1 | tee sync_output.log
           STATS_LINE=$(grep "Sync complete:" sync_output.log | tail -1)
