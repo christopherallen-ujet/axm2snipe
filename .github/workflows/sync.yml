@@ -76,30 +76,30 @@ jobs:
       - name: Notify Slack - sync complete
         if: success()
         run: |
+          DAY=$(date +%-d)
+          case $DAY in
+            1|21|31) SUFFIX="st";;
+            2|22) SUFFIX="nd";;
+            3|23) SUFFIX="rd";;
+            *) SUFFIX="th";;
+          esac
+          FORMATTED_DATE=$(date "+%A, %B ${DAY}${SUFFIX}, %Y")
           curl -X POST -H 'Content-type: application/json' \
             --data @- ${{ secrets.SLACK_WEBHOOK_URL }} <<EOF
           {
             "blocks": [
               {
-                "type": "header",
+                "type": "section",
                 "text": {
-                  "type": "plain_text",
-                  "text": "ABM → Snipe-IT Sync Complete",
-                  "emoji": true
+                  "type": "mrkdwn",
+                  "text": ":arrows_counterclockwise: *ABM → Snipe-IT Sync — ${FORMATTED_DATE}*"
                 }
               },
               {
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": ":white_check_mark: Sync completed successfully!"
-                }
-              },
-              {
-                "type": "section",
-                "text": {
-                  "type": "mrkdwn",
-                  "text": ":computer: *Total Devices:* ${TOTAL}\n:white_check_mark: *Updated:* ${UPDATED}\n:sparkles: *Created:* ${CREATED}\n:fast_forward: *Skipped:* ${SKIPPED}\n:new: *New Models:* ${NEW_MODELS}\n:warning: *Errors:* ${ERRORS}"
+                  "text": "*${UPDATED}* updated  •  *${CREATED}* created  •  *${SKIPPED}* skipped  •  *${NEW_MODELS}* new models  •  *${ERRORS}* errors"
                 }
               }
             ]
