@@ -65,6 +65,7 @@ type SyncConfig struct {
 	MDMOnlyCache     bool              `yaml:"mdm_only_cache"`    // also exclude non-MDM devices from cache (requires mdm_only)
 	SupplierMapping  map[string]int    `yaml:"supplier_mapping"`  // ABM purchaseSourceId or purchaseSourceType -> snipe supplier ID
 	ModelImages        bool              `yaml:"model_images"`         // fetch device images from appledb.dev for newly created models
+	SerialModelOverride map[string]int   `yaml:"serial_model_override"` // serial number -> snipe model ID, forces specific model for problem serials (e.g., ABM misidentifies new models)
 }
 
 // Load reads configuration from a YAML file and applies environment variable overrides.

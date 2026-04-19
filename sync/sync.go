@@ -645,28 +645,53 @@ func (e *Engine) processDevice(ctx context.Context, device abmclient.Device) err
 		logger.WithError(err).Warn("Could not resolve supplier, continuing without it")
 	}
 
+	// Check for serial-specific model override
+	overrideModelID, hasOverride := e.cfg.Sync.SerialModelOverride[serial]
+
 	switch existing.Total {
 	case 0:
 		// Create new asset — need to resolve model
-		modelID, err := e.ensureModel(ctx, attrs)
-		if err != nil {
-			return fmt.Errorf("ensuring model for %s: %w", serial, err)
+		var modelID int
+		if hasOverride {
+			modelID = overrideModelID
+			logger.WithField("model_id", modelID).Info("Using serial_model_override for new asset")
+		} else {
+			var err error
+			modelID, err = e.ensureModel(ctx, attrs)
+			if err != nil {
+				return fmt.Errorf("ensuring model for %s: %w", serial, err)
+			}
 		}
 		return e.createAsset(ctx, logger, device, modelID, supplierID, coverage)
 	case 1:
-    // Update model image if configured
-    if e.cfg.Sync.ModelImages && attrs.ProductType != "" {
-        modelID := existing.Rows[0].Model.ID
-        if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
-            if err := e.snipe.PatchModel(ctx, modelID, img); err != nil {
-                logger.WithError(err).Warn("Could not update model image, continuing")
-            } else {
-                logger.WithField("model_id", modelID).Debug("Updated model image")
-            }
-        }
-    }
-    // Update existing asset — model already assigned in Snipe-IT
-    return e.updateAsset(ctx, logger, device, &existing.Rows[0], supplierID, coverage)
+		existingAsset := existing.Rows[0]
+		// Apply serial_model_override by patching the asset to the correct model
+		if hasOverride && existingAsset.Model.ID != overrideModelID {
+			logger.WithFields(logrus.Fields{
+				"current_model_id":  existingAsset.Model.ID,
+				"override_model_id": overrideModelID,
+			}).Info("Applying serial_model_override — updating asset to correct model")
+			patch := snipeit.Asset{}
+			patch.Model.ID = overrideModelID
+			if _, err := e.snipe.PatchAsset(ctx, existingAsset.ID, patch); err != nil {
+				logger.WithError(err).Warn("Could not apply model override")
+			} else {
+				existingAsset.Model.ID = overrideModelID
+			}
+		}
+		// Update model image if configured (but skip if override is in effect, since user knows better)
+		if e.cfg.Sync.ModelImages && attrs.ProductType != "" && !hasOverride {
+			modelID := existingAsset.Model.ID
+			if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
+				if err := e.snipe.PatchModel(ctx, modelID, img); err != nil {
+					logger.WithError(err).Warn("Could not update model image, continuing")
+				} else {
+					logger.WithField("model_id", modelID).Debug("Updated model image")
+				}
+			}
+		}
+		// Update existing asset — model already assigned in Snipe-IT
+		return e.updateAsset(ctx, logger, device, &existingAsset, supplierID, coverage)
 	default:
 		logger.Warnf("Multiple assets (%d) found for serial, skipping", existing.Total)
 		e.stats.Skipped++
