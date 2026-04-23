@@ -46,7 +46,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": ":loading: Syncing devices from Apple Business Manager into Snipe-IT..."
+                  "text": ":applefitness: Syncing devices from Apple Business Manager into Snipe-IT..."
                 }
               }
             ]
