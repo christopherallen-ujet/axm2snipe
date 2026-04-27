@@ -66,6 +66,44 @@ type SyncConfig struct {
 	SupplierMapping  map[string]int    `yaml:"supplier_mapping"`  // ABM purchaseSourceId or purchaseSourceType -> snipe supplier ID
 	ModelImages        bool              `yaml:"model_images"`         // fetch device images from appledb.dev for newly created models
 	SerialModelOverride map[string]int   `yaml:"serial_model_override"` // serial number -> snipe model ID, forces specific model for problem serials (e.g., ABM misidentifies new models)
+
+	// ExcludedProductFamilies skips devices in these families entirely (e.g. ["Watch"]).
+	// Applied during processDevice — not even considered for create or update.
+	// Use the same family names as ProductFamilies: Mac, iPhone, iPad, AppleTV, Watch, Vision.
+	ExcludedProductFamilies []string `yaml:"excluded_product_families"`
+
+	// MaxAgeYears caps how old a device can be when CREATING a new Snipe-IT asset.
+	// Devices older than this many years (by purchase_date, falling back to added_to_org)
+	// will not be created, but EXISTING Snipe-IT assets are still updated regardless of age.
+	// Set to 0 to disable (default).
+	MaxAgeYears int `yaml:"max_age_years"`
+
+	// ReleasedDeviceFetch controls whether to query Snipe-IT serials missing from
+	// the ABM bulk fetch (typically released/unassigned devices) and fetch them
+	// individually via the single-device endpoint. Adds ~2-3 min to sync runtime
+	// but ensures release dates and other late-lifecycle data stay in sync.
+	// Default: true.
+	ReleasedDeviceFetch *bool `yaml:"released_device_fetch"`
+}
+
+// ReleasedDeviceFetchEnabled returns whether to perform the released device
+// fetch step. Defaults to true if not explicitly set.
+func (s *SyncConfig) ReleasedDeviceFetchEnabled() bool {
+	if s.ReleasedDeviceFetch == nil {
+		return true
+	}
+	return *s.ReleasedDeviceFetch
+}
+
+// IsExcludedFamily returns true if the given product family is in the
+// excluded list (case-insensitive).
+func (s *SyncConfig) IsExcludedFamily(family string) bool {
+	for _, excluded := range s.ExcludedProductFamilies {
+		if strings.EqualFold(family, excluded) {
+			return true
+		}
+	}
+	return false
 }
 
 // Load reads configuration from a YAML file and applies environment variable overrides.

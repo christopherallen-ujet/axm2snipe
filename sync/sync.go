@@ -422,6 +422,13 @@ func (e *Engine) Run(ctx context.Context) (*Stats, error) {
 	}
 	log.Infof("Fetched %d devices from Apple Business Manager", len(devices))
 
+	// Step 2b: Find Snipe-IT serials missing from the bulk fetch and pull
+	// them individually. ABM's bulk /v1/orgDevices endpoint only returns
+	// currently-assigned devices; released devices must be fetched by serial.
+	if e.cfg.Sync.ReleasedDeviceFetchEnabled() && e.cache == nil {
+		devices = e.augmentWithReleasedDevices(ctx, devices)
+	}
+
 	// Step 3: Process each device
 	for i, device := range devices {
 		if err := ctx.Err(); err != nil {
@@ -442,6 +449,79 @@ func (e *Engine) Run(ctx context.Context) (*Stats, error) {
 		e.stats.Total, e.stats.Created, e.stats.Updated, e.stats.Skipped, e.stats.Errors, e.stats.ModelNew)
 
 	return &e.stats, nil
+}
+
+// augmentWithReleasedDevices identifies devices that exist in Snipe-IT but
+// weren't returned by the ABM bulk fetch (typically released/unassigned),
+// fetches them individually from ABM, and appends them to the device list.
+//
+// Returns the original device list unchanged if Snipe-IT can't be queried
+// or if no missing devices are found. Errors during the fetch are logged
+// but don't abort the sync — we'd rather sync the bulk devices than fail
+// the whole run because released-device backfill couldn't run.
+func (e *Engine) augmentWithReleasedDevices(ctx context.Context, bulkDevices []abmclient.Device) []abmclient.Device {
+	snipeSerials, err := e.snipe.ListAllSerials(ctx)
+	if err != nil {
+		log.WithError(err).Warn("Could not fetch Snipe-IT serial list for released device detection — skipping released fetch")
+		return bulkDevices
+	}
+
+	// Build set of serials we already have from bulk
+	have := make(map[string]bool, len(bulkDevices))
+	for _, d := range bulkDevices {
+		s := strings.ToUpper(deviceSerial(d))
+		if s != "" {
+			have[s] = true
+		}
+	}
+
+	// Find serials in Snipe-IT not in the bulk fetch
+	var missing []string
+	for _, s := range snipeSerials {
+		if !have[strings.ToUpper(s)] {
+			missing = append(missing, s)
+		}
+	}
+
+	if len(missing) == 0 {
+		log.Debug("No Snipe-IT serials missing from ABM bulk fetch — released device fetch not needed")
+		return bulkDevices
+	}
+
+	log.Infof("Fetching %d devices individually from ABM (likely released/unassigned)", len(missing))
+	released, err := e.abm.FetchDevicesBySerials(ctx, missing)
+	if err != nil {
+		log.WithError(err).Warn("Released device fetch returned an error; continuing with partial results")
+	}
+
+	if len(released) > 0 {
+		log.Infof("Recovered %d released devices from ABM", len(released))
+		bulkDevices = append(bulkDevices, released...)
+	}
+
+	return bulkDevices
+}
+
+// isOlderThanYears returns true if the device's purchase or org-add date is
+// older than the given number of years. Tries OrderDateTime (purchase) first,
+// then AddedToOrgDateTime as a fallback. Returns false if neither date is
+// available — when in doubt, don't skip.
+func isOlderThanYears(attrs *abm.OrgDeviceAttributes, years int) bool {
+	if attrs == nil || years <= 0 {
+		return false
+	}
+	cutoff := time.Now().AddDate(-years, 0, 0)
+
+	// Try OrderDateTime first (purchase date — most stable, doesn't change after enrollment)
+	if !attrs.OrderDateTime.IsZero() {
+		return attrs.OrderDateTime.Before(cutoff)
+	}
+	// Fall back to AddedToOrgDateTime (when ABM first saw the device)
+	if !attrs.AddedToOrgDateTime.IsZero() {
+		return attrs.AddedToOrgDateTime.Before(cutoff)
+	}
+	// Unknown age — don't skip
+	return false
 }
 
 // loadModels fetches all models from Snipe-IT and builds a lookup map.
@@ -599,6 +679,16 @@ func (e *Engine) processDevice(ctx context.Context, device abmclient.Device) err
 		}
 	}
 
+	// Skip excluded product families entirely (e.g. Apple Watch).
+	// Applies to BOTH create and update paths — these devices should not
+	// exist in Snipe-IT at all.
+	productFamily := string(attrs.ProductFamily)
+	if productFamily != "" && e.cfg.Sync.IsExcludedFamily(productFamily) {
+		logger.WithField("family", productFamily).Debug("Skipping device in excluded product family")
+		e.stats.Skipped++
+		return nil
+	}
+
 	// Skip devices not assigned to an MDM server if configured
 	if e.cfg.Sync.MDMOnly && device.AssignedServer == "" {
 		logger.Info("Skipping device not assigned to any MDM server (mdm_only mode)")
@@ -614,6 +704,16 @@ func (e *Engine) processDevice(ctx context.Context, device abmclient.Device) err
 
 	if existing.Total == 0 && e.cfg.Sync.UpdateOnly {
 		logger.Info("Skipping asset not found in Snipe-IT (update_only mode)")
+		e.stats.Skipped++
+		return nil
+	}
+
+	// Age filter: only applies to CREATE path, not updates.
+	// Existing Snipe-IT assets continue to receive updates regardless of age,
+	// but new assets older than max_age_years are not created (avoids importing
+	// historical hardware that's already long-disposed).
+	if existing.Total == 0 && e.cfg.Sync.MaxAgeYears > 0 && isOlderThanYears(attrs, e.cfg.Sync.MaxAgeYears) {
+		logger.WithField("max_age_years", e.cfg.Sync.MaxAgeYears).Debug("Skipping creation of device older than max_age_years")
 		e.stats.Skipped++
 		return nil
 	}
