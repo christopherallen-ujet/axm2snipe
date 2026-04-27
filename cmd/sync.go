@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -22,6 +24,7 @@ func NewSyncCmd() *cobra.Command {
 	cmd.Flags().String("serial", "", "Sync a single device by serial number (implies --force)")
 	cmd.Flags().Bool("use-cache", false, "Use cached data instead of fetching from ABM API")
 	cmd.Flags().Bool("update-only", false, "Only update existing assets, never create new ones")
+	cmd.Flags().Bool("clear-cache", false, "Delete the cache directory before syncing (auto-enabled when --force is set)")
 
 	return cmd
 }
@@ -39,6 +42,30 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	if Cfg.Sync.DryRun {
 		log.Info("Running in DRY RUN mode - no changes will be made")
+	}
+
+	// Clear the cache directory when --clear-cache is passed OR when force is enabled.
+	// We never clear when --use-cache is set, since that would defeat the purpose.
+	clearCache, _ := cmd.Flags().GetBool("clear-cache")
+	if (clearCache || Cfg.Sync.Force) && !Cfg.Sync.UseCache {
+		cacheDir := Cfg.Sync.CacheDir
+		if cacheDir == "" {
+			cacheDir = ".cache"
+		}
+		// Resolve to absolute path for clearer logging
+		absPath, err := filepath.Abs(cacheDir)
+		if err != nil {
+			absPath = cacheDir
+		}
+		if _, statErr := os.Stat(absPath); statErr == nil {
+			if err := os.RemoveAll(absPath); err != nil {
+				log.WithError(err).WithField("path", absPath).Warn("Could not clear cache directory")
+			} else {
+				log.WithField("path", absPath).Info("Cleared cache directory before sync")
+			}
+		} else {
+			log.WithField("path", absPath).Debug("Cache directory does not exist — nothing to clear")
+		}
 	}
 
 	ctx, cancel := contextWithSignal()
