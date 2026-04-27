@@ -66,12 +66,15 @@ jobs:
           SKIPPED=$(echo "$STATS_LINE" | grep -oE 'skipped=[0-9]+' | cut -d= -f2)
           ERRORS=$(echo "$STATS_LINE" | grep -oE 'errors=[0-9]+' | cut -d= -f2)
           NEW_MODELS=$(echo "$STATS_LINE" | grep -oE 'new_models=[0-9]+' | cut -d= -f2)
+          # Parse released device recovery count from augmentWithReleasedDevices logs
+          RELEASED=$(grep -oE "Recovered [0-9]+ released devices" sync_output.log | grep -oE '[0-9]+' | tail -1)
           echo "TOTAL=${TOTAL:-0}" >> $GITHUB_ENV
           echo "CREATED=${CREATED:-0}" >> $GITHUB_ENV
           echo "UPDATED=${UPDATED:-0}" >> $GITHUB_ENV
           echo "SKIPPED=${SKIPPED:-0}" >> $GITHUB_ENV
           echo "ERRORS=${ERRORS:-0}" >> $GITHUB_ENV
           echo "NEW_MODELS=${NEW_MODELS:-0}" >> $GITHUB_ENV
+          echo "RELEASED=${RELEASED:-0}" >> $GITHUB_ENV
 
       - name: Notify Slack - sync complete
         if: success()
@@ -99,7 +102,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*${UPDATED}* updated  •  *${CREATED}* created  •  *${SKIPPED}* skipped  •  *${NEW_MODELS}* new models  •  *${ERRORS}* errors"
+                  "text": "*${TOTAL}* total  •  *${UPDATED}* updated  •  *${CREATED}* created  •  *${SKIPPED}* skipped  •  *${RELEASED}* released recovered  •  *${NEW_MODELS}* new models  •  *${ERRORS}* errors"
                 }
               }
             ]
