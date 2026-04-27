@@ -102,7 +102,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "*${TOTAL}* total  •  *${UPDATED}* updated  •  *${CREATED}* created  •  *${SKIPPED}* skipped  •  *${RELEASED}* released recovered  •  *${NEW_MODELS}* new models  •  *${ERRORS}* errors"
+                  "text": "*${TOTAL}* total  •  *${UPDATED}* updated  •  *${CREATED}* created  •  *${SKIPPED}* skipped  •  *${RELEASED}* released devices synced  •  *${NEW_MODELS}* new models  •  *${ERRORS}* errors"
                 }
               }
             ]
