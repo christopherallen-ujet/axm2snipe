@@ -779,17 +779,6 @@ func (e *Engine) processDevice(ctx context.Context, device abmclient.Device) err
 				existingAsset.Model.ID = overrideModelID
 			}
 		}
-		// Update model image if configured (but skip if override is in effect, since user knows better)
-		if e.cfg.Sync.ModelImages && attrs.ProductType != "" && !hasOverride {
-			modelID := existingAsset.Model.ID
-			if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
-				if err := e.snipe.PatchModel(ctx, modelID, img); err != nil {
-					logger.WithError(err).Warn("Could not update model image, continuing")
-				} else {
-					logger.WithField("model_id", modelID).Debug("Updated model image")
-				}
-			}
-		}
 		// Update existing asset — model already assigned in Snipe-IT
 		return e.updateAsset(ctx, logger, device, &existingAsset, supplierID, coverage)
 	default:
@@ -807,15 +796,6 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 	// that may already exist in Snipe-IT as model numbers from MDM tools like Jamf
 	if attrs.ProductType != "" {
 		if id, ok := e.models[attrs.ProductType]; ok {
-			if e.cfg.Sync.ModelImages {
-				if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
-					if err := e.snipe.PatchModel(ctx, id, img); err != nil {
-						log.WithError(err).WithField("model_id", id).Warn("Could not update model image, continuing")
-					} else {
-						log.WithField("model_id", id).Debug("Updated model image")
-					}
-				}
-			}
 			return id, nil
 		}
 	}
@@ -823,15 +803,6 @@ func (e *Engine) ensureModel(ctx context.Context, attrs *abm.OrgDeviceAttributes
 	// Try matching DeviceModel (e.g. "Mac mini (2024)") against model numbers and names
 	if attrs.DeviceModel != "" {
 		if id, ok := e.models[attrs.DeviceModel]; ok {
-			if e.cfg.Sync.ModelImages && attrs.ProductType != "" {
-				if img := fetchModelImage(ctx, attrs.ProductType); img != "" {
-					if err := e.snipe.PatchModel(ctx, id, img); err != nil {
-						log.WithError(err).WithField("model_id", id).Warn("Could not update model image, continuing")
-					} else {
-						log.WithField("model_id", id).Debug("Updated model image")
-					}
-				}
-			}
 			return id, nil
 		}
 	}
